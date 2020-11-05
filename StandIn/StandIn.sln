@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30503.244
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StandIn", "StandIn\StandIn.csproj", "{01C142BA-7AF1-48D6-B185-81147A2F7DB7}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{01C142BA-7AF1-48D6-B185-81147A2F7DB7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{01C142BA-7AF1-48D6-B185-81147A2F7DB7}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {391796AE-5AF2-45A9-A081-D82FF1A163C9}
+	EndGlobalSection
+EndGlobal
