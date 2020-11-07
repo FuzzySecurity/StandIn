@@ -615,15 +615,15 @@ C:\> StandIn.exe --spn
     Supported ETypes       : RC4_HMAC_DEFAULT
 ```
 
-## Unconstrained / constrained delegation
+## Unconstrained / constrained / resource-based constrained delegation
 
 #### Use Case
 
-> *This function enumerates all accounts that are permitted to perform [unconstrained](https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/domain-compromise-via-unrestricted-kerberos-delegation) or [constrained](https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/abusing-kerberos-constrained-delegation) delegation. These assets can be used to expand access or achieve objectives.*
+> *This function enumerates all accounts that are permitted to perform [unconstrained](https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/domain-compromise-via-unrestricted-kerberos-delegation), [constrained](https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/abusing-kerberos-constrained-delegation), or [resource-based constrained](https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/resource-based-constrained-delegation-ad-computer-object-take-over-and-privilged-code-execution) delegation. These assets can be used to expand access or achieve objectives.*
 
 #### Syntax
 
-Return all accounts that have either unconstrained or consrtained delegation permissions.
+Return all accounts that have either unconstrained or constrained delegation permissions, or have inbound resource-based constrained delegation privileges.
 
 ```
 C:\> StandIn.exe --delegation
