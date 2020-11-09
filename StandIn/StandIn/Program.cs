@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using CommandLine;
 using System.DirectoryServices;
 using System.DirectoryServices.ActiveDirectory;
@@ -1132,7 +1132,7 @@ namespace StandIn
                             }
                             iDelegateCount += 1;
                         }
-                        if (((int)mde.Properties["userAccountControl"].Value & (int)hStandIn.USER_ACCOUNT_CONTROL.TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION) > 0)
+                        if (((Int32)mde.Properties["userAccountControl"].Value & (Int32)hStandIn.USER_ACCOUNT_CONTROL.TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION) != 0)
                         {
                             Console.WriteLine("    Protocol Transition      : True");
                         }
@@ -1191,37 +1191,44 @@ namespace StandIn
                         Console.WriteLine("    DistinguishedName        : " + omProps["distinguishedName"][0].ToString());
 
 
-                        string searchFilter = "(&(|";
+                        String sFilter = "(&(|";
                         RawSecurityDescriptor rsd = new RawSecurityDescriptor((byte[])omProps["msDS-AllowedToActOnBehalfOfOtherIdentity"][0], 0);
-                        //get the ACE for each entry in the object's DACL, each of which points to an object that has inbound RBCD privileges.  Used to build a new search query
-                        foreach (System.Security.AccessControl.CommonAce ace in rsd.DiscretionaryAcl)
+                        // Get the ACE for each entry in the object's DACL, each of which points to an object that has inbound RBCD privileges.
+                        foreach (CommonAce ace in rsd.DiscretionaryAcl)
                         {
-                            searchFilter = searchFilter + "(objectSid=" + ace.SecurityIdentifier.ToString() + ")";
+                            sFilter = sFilter + "(objectSid=" + ace.SecurityIdentifier.ToString() + ")";
                         }
-                        searchFilter = searchFilter + ")(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))";
+                        sFilter = sFilter + ")(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))";
 
-                        ds.Filter = searchFilter;
+                        ds.Filter = sFilter;
                         SearchResultCollection delegationObjs = ds.FindAll();
 
                         UInt32 iDelegateCount = 0;
-                        string group = "";
-                        //parse the results of the search query to get the name of each object that has inbound RBCD privileges on the current object
+                        // Parse the results of the search query to get for each object that has inbound RBCD privileges on the current object.
                         foreach (SearchResult delegationObj in delegationObjs)
                         {
-                            omProps = delegationObj.Properties;
-                            if (omProps.Contains("grouptype"))
-                            {
-                                group = " (group obj)";
-                            }
+                            ResultPropertyCollection srProps = delegationObj.Properties;
                             if (iDelegateCount == 0)
                             {
-                                Console.WriteLine("    Inbound Delegation       : " + omProps["samAccountName"][0].ToString() + group);
+                                if (srProps.Contains("grouptype"))
+                                {
+                                    Console.WriteLine("    Inbound Delegation       : " + srProps["samAccountName"][0].ToString() + " [GROUP]");
+                                } else
+                                {
+                                    Console.WriteLine("    Inbound Delegation       : " + srProps["samAccountName"][0].ToString());
+                                }
                             }
                             else
                             {
-                                Console.WriteLine("                               " + omProps["samAccountName"][0].ToString() + group);
+                                if (srProps.Contains("grouptype"))
+                                {
+                                    Console.WriteLine("                               " + srProps["samAccountName"][0].ToString() + " [GROUP]");
+                                }
+                                else
+                                {
+                                    Console.WriteLine("                               " + srProps["samAccountName"][0].ToString());
+                                }
                             }
-                            group = "";
                             iDelegateCount += 1;
                         }
                         Console.WriteLine("    userAccountControl       : " + (hStandIn.USER_ACCOUNT_CONTROL)omProps["useraccountcontrol"][0]);
@@ -1265,7 +1272,7 @@ namespace StandIn
             }
             DirectorySearcher ds = so.searcher;
 
-            // Unconstrained delegation filter
+            // ASREP filter
             ds.Filter = "(&(userAccountControl:1.2.840.113556.1.4.803:=4194304)(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))";
 
             // Enum
