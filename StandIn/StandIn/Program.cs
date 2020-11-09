@@ -43,7 +43,7 @@ namespace StandIn
                     return;
                 }
 
-                // Get machine details
+                // Get object details
                 foreach (SearchResult sr in oObject)
                 {
                     DirectoryEntry mde = sr.GetDirectoryEntry();
@@ -622,7 +622,7 @@ namespace StandIn
             }
         }
 
-        public static void grantObjectAccessPermissions(String sObject, hStandIn.AccessRequest oAccess, String sNTAccount, String sDomain = "", String sUser = "", String sPass = "")
+        public static void grantObjectAccessPermissions(String sObject, hStandIn.AccessRequest oAccess, String sGUID, String sNTAccount, String sDomain = "", String sUser = "", String sPass = "")
         {
             // Create searcher
             hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass);
@@ -705,9 +705,22 @@ namespace StandIn
                             ar = new ActiveDirectoryAccessRule(ir, ActiveDirectoryRights.ExtendedRight, AccessControlType.Allow, rightGuid, ActiveDirectorySecurityInheritance.None);
                             mde.Options.SecurityMasks = System.DirectoryServices.SecurityMasks.Dacl;
                             mde.ObjectSecurity.AddAccessRule(ar);
+                        } else if (!String.IsNullOrEmpty(sGUID))
+                        {
+                            Guid rightGuid = new Guid(sGUID); // Custom rights guid
+                            ActiveDirectoryAccessRule ar = new ActiveDirectoryAccessRule(ir, ActiveDirectoryRights.ExtendedRight, AccessControlType.Allow, rightGuid, ActiveDirectorySecurityInheritance.None);
+                            mde.Options.SecurityMasks = System.DirectoryServices.SecurityMasks.Dacl;
+                            mde.ObjectSecurity.AddAccessRule(ar);
                         }
+
                         mde.CommitChanges();
-                        Console.WriteLine("    |_ Success, added " + Enum.GetName(typeof(hStandIn.AccessRequest), oAccess) + " privileges to object for " + sNTAccount);
+                        if (Enum.GetName(typeof(hStandIn.AccessRequest), oAccess) != "none")
+                        {
+                            Console.WriteLine("    |_ Success, added " + Enum.GetName(typeof(hStandIn.AccessRequest), oAccess) + " privileges to object for " + sNTAccount);
+                        } else
+                        {
+                            Console.WriteLine("    |_ Success, added GUID rights privilege to object for " + sNTAccount);
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -1525,6 +1538,9 @@ namespace StandIn
             [Option(null, "ntaccount")]
             public String sNtaccount { get; set; }
 
+            [Option(null, "guid")]
+            public String sGUID { get; set; }
+
             [Option(null, "delegation")]
             public Boolean bDelegation { get; set; }
 
@@ -1604,21 +1620,25 @@ namespace StandIn
                             }
                             else if (!String.IsNullOrEmpty(ArgOptions.sGrant))
                             {
-                                if (!String.IsNullOrEmpty(ArgOptions.sType))
+                                if (!String.IsNullOrEmpty(ArgOptions.sType) && ArgOptions.sType.ToLower() != "none")
                                 {
                                     try
                                     {
                                         hStandIn.AccessRequest arq = (hStandIn.AccessRequest)Enum.Parse(typeof(hStandIn.AccessRequest), ArgOptions.sType.ToLower());
-                                        grantObjectAccessPermissions(ArgOptions.sObject, arq, ArgOptions.sGrant, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                        grantObjectAccessPermissions(ArgOptions.sObject, arq, ArgOptions.sGUID, ArgOptions.sGrant, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
                                     }
                                     catch
                                     {
                                         Console.WriteLine("[!] Invalid access premission type provided..");
                                     }
                                 }
+                                else if (!String.IsNullOrEmpty(ArgOptions.sGUID))
+                                {
+                                    grantObjectAccessPermissions(ArgOptions.sObject, hStandIn.AccessRequest.none, ArgOptions.sGUID, ArgOptions.sGrant, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                }
                                 else
                                 {
-                                    grantObjectAccessPermissions(ArgOptions.sObject, hStandIn.AccessRequest.genericall, ArgOptions.sGrant, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                    grantObjectAccessPermissions(ArgOptions.sObject, hStandIn.AccessRequest.genericall, ArgOptions.sGUID, ArgOptions.sGrant, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
                                 }
                             }
                             else if (!String.IsNullOrEmpty(ArgOptions.sNewPass))

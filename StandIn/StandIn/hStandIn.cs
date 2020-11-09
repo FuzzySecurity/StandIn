@@ -17,6 +17,7 @@ namespace StandIn
 
         public enum AccessRequest : UInt32
         {
+            none,
             genericall,
             genericwrite,
             resetpassword,
@@ -86,7 +87,7 @@ namespace StandIn
 		{
 			Console.WriteLine(@"  __               ");
 			Console.WriteLine(@" ( _/_   _//   ~b33f");
-			Console.WriteLine(@"__)/(//)(/(/)  v0.7");
+			Console.WriteLine(@"__)/(//)(/(/)  v0.8");
             Console.WriteLine(@"");
             string HelpText = "\n >--~~--> Args? <--~~--<\n\n" +
 							  "--help        This help menu\n" +
@@ -96,6 +97,7 @@ namespace StandIn
                               "--ntaccount   User name, e.g. \"REDHOOK\\UPickman\"\n" +
                               "--sid         String SID representing a target machine\n" +
                               "--grant       User name, e.g. \"REDHOOK\\KMason\"\n" +
+                              "--guid        Rights GUID to add to object, e.g. 1131f6aa-9c07-11d1-f79f-00c04fc2dcd2\n" +
                               "--domain      Domain name, e.g. REDHOOK\n" +
 							  "--user        User name\n" +
 							  "--pass        Password\n" +
@@ -122,6 +124,7 @@ namespace StandIn
 
                               "# Grant object access permissions\n" +
                               "StandIn.exe --object \"distinguishedname=DC=redhook,DC=local\" --grant \"REDHOOK\\MBWillett\" --type DCSync\n" +
+                              "StandIn.exe --object \"distinguishedname=DC=redhook,DC=local\" --grant \"REDHOOK\\MBWillett\" --guid 1131f6aa-9c07-11d1-f79f-00c04fc2dcd2\n" +
                               "StandIn.exe --object samaccountname=SomeTarget001$ --grant \"REDHOOK\\MBWillett\" --type GenericWrite --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
 
                               "# Set object password\n" +
