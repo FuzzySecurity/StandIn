@@ -1044,7 +1044,7 @@ C:\> StandIn.exe --computer m-10-1909-03 --remove
 
 ## Detection
 
-This section will outline a number of IOC which can aid the detection engineering process for StandIn.
+This outlines a number of IOC's which can aid in the detection engineering process for StandIn.
 
 #### Release Package Hashes
 
