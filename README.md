@@ -1113,3 +1113,5 @@ rule Silk_StandIn_Generic
         any of them
 }
 ```
+
+![Help](Images/Silk_StandIn.png)
