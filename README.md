@@ -615,15 +615,15 @@ C:\> StandIn.exe --spn
     Supported ETypes       : RC4_HMAC_DEFAULT
 ```
 
-## Unconstrained / constrained delegation
+## Unconstrained / constrained / resource-based constrained delegation
 
 #### Use Case
 
-> *This function enumerates all accounts that are permitted to perform [unconstrained](https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/domain-compromise-via-unrestricted-kerberos-delegation) or [constrained](https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/abusing-kerberos-constrained-delegation) delegation. These assets can be used to expand access or achieve objectives.*
+> *This function enumerates all accounts that are permitted to perform [unconstrained](https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/domain-compromise-via-unrestricted-kerberos-delegation), [constrained](https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/abusing-kerberos-constrained-delegation), or [resource-based constrained](https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/resource-based-constrained-delegation-ad-computer-object-take-over-and-privilged-code-execution) delegation. These assets can be used to expand access or achieve objectives.*
 
 #### Syntax
 
-Return all accounts that have either unconstrained or consrtained delegation permissions.
+Return all accounts that have either unconstrained or constrained delegation permissions, or have inbound resource-based constrained delegation privileges.
 
 ```
 C:\> StandIn.exe --delegation
@@ -632,8 +632,8 @@ C:\> StandIn.exe --delegation
 
 [?] Found 3 object(s) with unconstrained delegation..
 
-[*] SamAccountName           : M-2019-05$
-    DistinguishedName        : CN=M-2019-05,OU=Servers,OU=OCCULT,DC=main,DC=redhook,DC=local
+[*] SamAccountName           : M-2019-03$
+    DistinguishedName        : CN=M-2019-03,OU=Servers,OU=OCCULT,DC=main,DC=redhook,DC=local
     userAccountControl       : WORKSTATION_TRUST_ACCOUNT, TRUSTED_FOR_DELEGATION
 
 [*] SamAccountName           : M-W16-DC01$
@@ -644,18 +644,31 @@ C:\> StandIn.exe --delegation
     DistinguishedName        : CN=M-W19-DC01,OU=Domain Controllers,DC=main,DC=redhook,DC=local
     userAccountControl       : SERVER_TRUST_ACCOUNT, TRUSTED_FOR_DELEGATION
 
-[?] Found 1 object(s) with constrained delegation..
+[?] Found 2 object(s) with constrained delegation..
 
-[*] SamAccountName           : M-2019-06$
-    DistinguishedName        : CN=M-2019-06,OU=Servers,OU=OCCULT,DC=main,DC=redhook,DC=local
-    msDS-AllowedToDelegateTo : ldap/m-w16-dc01.main.redhook.local/main.redhook.local
-                               ldap/m-w16-dc01.main.redhook.local
-                               ldap/M-W16-DC01
-                               ldap/m-w16-dc01.main.redhook.local/MAIN
-                               ldap/M-W16-DC01/MAIN
-                               ldap/m-w16-dc01.main.redhook.local/DomainDnsZones.main.redhook.local
-                               ldap/m-w16-dc01.main.redhook.local/ForestDnsZones.main.redhook.local
+[*] SamAccountName           : M-2019-04$
+    DistinguishedName        : CN=M-2019-04,OU=Servers,OU=OCCULT,DC=main,DC=redhook,DC=local
+    msDS-AllowedToDelegateTo : HOST/m-w16-dc01.main.redhook.local/main.redhook.local
+                               HOST/m-w16-dc01.main.redhook.local
+                               HOST/M-W16-DC01
+                               HOST/m-w16-dc01.main.redhook.local/MAIN
+                               HOST/M-W16-DC01/MAIN
+    Protocol Transition      : False
+    userAccountControl       : WORKSTATION_TRUST_ACCOUNT
+
+[*] SamAccountName           : M-2019-05$
+    DistinguishedName        : CN=M-2019-05,OU=Servers,OU=OCCULT,DC=main,DC=redhook,DC=local
+    msDS-AllowedToDelegateTo : cifs/m-2012r2-03.main.redhook.local
+                               cifs/M-2012R2-03
+    Protocol Transition      : True
     userAccountControl       : WORKSTATION_TRUST_ACCOUNT, TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION
+
+[?] Found 1 object(s) with resource-based constrained delegation..
+
+[*] SamAccountName           : M-10-1909-01$
+    DistinguishedName        : CN=M-10-1909-01,OU=Workstations,OU=OCCULT,DC=main,DC=redhook,DC=local
+    Inbound Delegation       : Server Admins [GROUP]
+    userAccountControl       : WORKSTATION_TRUST_ACCOUNT
 ```
 
 ## DC's

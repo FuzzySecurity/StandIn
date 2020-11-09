@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using CommandLine;
 using System.DirectoryServices;
 using System.DirectoryServices.ActiveDirectory;
@@ -1100,7 +1100,7 @@ namespace StandIn
             }
 
             // Constrained delegation filter
-            ds.Filter = "(&(userAccountControl:1.2.840.113556.1.4.803:=16777216)(msDS-AllowedToDelegateTo=*)(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))";
+            ds.Filter = "(&(msDS-AllowedToDelegateTo=*)(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))";
 
             // Enum
             try
@@ -1125,9 +1125,109 @@ namespace StandIn
                             if (iDelegateCount == 0)
                             {
                                 Console.WriteLine("    msDS-AllowedToDelegateTo : " + oColl);
-                            } else
+                            }
+                            else
                             {
                                 Console.WriteLine("                               " + oColl);
+                            }
+                            iDelegateCount += 1;
+                        }
+                        if (((Int32)mde.Properties["userAccountControl"].Value & (Int32)hStandIn.USER_ACCOUNT_CONTROL.TRUSTED_TO_AUTHENTICATE_FOR_DELEGATION) != 0)
+                        {
+                            Console.WriteLine("    Protocol Transition      : True");
+                        }
+                        else
+                        {
+                            Console.WriteLine("    Protocol Transition      : False");
+                        }
+                        Console.WriteLine("    userAccountControl       : " + (hStandIn.USER_ACCOUNT_CONTROL)omProps["useraccountcontrol"][0]);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("[!] Failed to enumerate DirectoryEntry properties..");
+                        if (ex.InnerException != null)
+                        {
+                            Console.WriteLine("    |_ " + ex.InnerException.Message);
+                        }
+                        else
+                        {
+                            Console.WriteLine("    |_ " + ex.Message);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[!] Failed to enumerate accounts..");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine("    |_ " + ex.InnerException.Message);
+                }
+                else
+                {
+                    Console.WriteLine("    |_ " + ex.Message);
+                }
+            }
+
+            // Resource-Based Constrained delegation filter
+            ds.Filter = "(&(msDS-AllowedToActOnBehalfOfOtherIdentity=*)(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))";
+
+            // Enum  
+            try
+            {
+                // Search
+                SearchResultCollection oObject = ds.FindAll();
+                Console.WriteLine("\n[?] Found " + oObject.Count + " object(s) with resource-based constrained delegation..");
+
+                // For each account that has rbcd configured on it pointing to other objects
+                foreach (SearchResult sr in oObject)
+                {
+                    try
+                    {
+                        DirectoryEntry mde = sr.GetDirectoryEntry();
+                        ResultPropertyCollection omProps = sr.Properties;
+
+                        Console.WriteLine("\n[*] SamAccountName           : " + omProps["samAccountName"][0].ToString());
+                        Console.WriteLine("    DistinguishedName        : " + omProps["distinguishedName"][0].ToString());
+
+
+                        String sFilter = "(&(|";
+                        RawSecurityDescriptor rsd = new RawSecurityDescriptor((byte[])omProps["msDS-AllowedToActOnBehalfOfOtherIdentity"][0], 0);
+                        // Get the ACE for each entry in the object's DACL, each of which points to an object that has inbound RBCD privileges.
+                        foreach (CommonAce ace in rsd.DiscretionaryAcl)
+                        {
+                            sFilter = sFilter + "(objectSid=" + ace.SecurityIdentifier.ToString() + ")";
+                        }
+                        sFilter = sFilter + ")(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))";
+
+                        ds.Filter = sFilter;
+                        SearchResultCollection delegationObjs = ds.FindAll();
+
+                        UInt32 iDelegateCount = 0;
+                        // Parse the results of the search query to get for each object that has inbound RBCD privileges on the current object.
+                        foreach (SearchResult delegationObj in delegationObjs)
+                        {
+                            ResultPropertyCollection srProps = delegationObj.Properties;
+                            if (iDelegateCount == 0)
+                            {
+                                if (srProps.Contains("grouptype"))
+                                {
+                                    Console.WriteLine("    Inbound Delegation       : " + srProps["samAccountName"][0].ToString() + " [GROUP]");
+                                } else
+                                {
+                                    Console.WriteLine("    Inbound Delegation       : " + srProps["samAccountName"][0].ToString());
+                                }
+                            }
+                            else
+                            {
+                                if (srProps.Contains("grouptype"))
+                                {
+                                    Console.WriteLine("                               " + srProps["samAccountName"][0].ToString() + " [GROUP]");
+                                }
+                                else
+                                {
+                                    Console.WriteLine("                               " + srProps["samAccountName"][0].ToString());
+                                }
                             }
                             iDelegateCount += 1;
                         }
@@ -1172,7 +1272,7 @@ namespace StandIn
             }
             DirectorySearcher ds = so.searcher;
 
-            // Unconstrained delegation filter
+            // ASREP filter
             ds.Filter = "(&(userAccountControl:1.2.840.113556.1.4.803:=4194304)(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))";
 
             // Enum
