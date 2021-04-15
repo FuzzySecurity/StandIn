@@ -147,6 +147,14 @@ namespace StandIn
                               "StandIn.exe --spn\n" +
                               "StandIn.exe --spn --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
 
+                              "# Add a SPN to a user\n" +
+                              "StandIn.exe --object samaccountname=HArmitage --spn --add --sPrincipalName MSSQL/Dataleak\n" +
+                              "StandIn.exe --object samaccountname=FMorgan --spn --add --sPrincipalName MSSQL/Dataleak --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
+                              "# Remove a SPN from a user\n" +
+                              "StandIn.exe --object samaccountname=HArmitage --spn --remove --sPrincipalName MSSQL/Dataleak\n" +
+                              "StandIn.exe --object samaccountname=FMorgan --spn --remove --sPrincipalName MSSQL/Dataleak --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
                               "# List all accounts with unconstrained & constrained delegation privileges\n" +
                               "StandIn.exe --delegation\n" +
                               "StandIn.exe --delegation --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +

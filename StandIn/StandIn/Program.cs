@@ -7,6 +7,7 @@ using System.DirectoryServices.AccountManagement;
 using System.Net;
 using System.Security.AccessControl;
 using System.Security.Principal;
+using System.Collections;
 
 namespace StandIn
 {
@@ -964,7 +965,22 @@ namespace StandIn
 
                         Console.WriteLine("\n[*] SamAccountName         : " + omProps["samAccountName"][0].ToString());
                         Console.WriteLine("    DistinguishedName      : " + omProps["distinguishedName"][0].ToString());
-                        Console.WriteLine("    ServicePrincipalName   : " + omProps["servicePrincipalName"][0].ToString());
+
+                        if (omProps["servicePrincipalName"].Count > 1)
+                        {
+                            ArrayList servicePrincipalName = new ArrayList();
+
+                            foreach (var element in omProps["servicePrincipalName"])
+                            {
+                                servicePrincipalName.Add(element.ToString());
+                            }
+                            Console.WriteLine("    ServicePrincipalName   : " + String.Join(", ", servicePrincipalName.ToArray()));
+                        } else
+                        {
+                            Console.WriteLine("    ServicePrincipalName   : " + omProps["servicePrincipalName"][0].ToString());
+
+                        }
+
                         long lastPwdSet = 0;
                         try
                         {
@@ -1051,6 +1067,153 @@ namespace StandIn
                 }
             }
         }
+
+        public static void setSPN(String sObject, String sPrincipalName, Boolean bRemove = false, String sDomain = "", String sUser = "", String sPass = "")
+        {
+            if (String.IsNullOrEmpty(sPrincipalName))
+            {
+                Console.WriteLine("[!] sPrincipalName must be provided..");
+                return;
+            }
+
+            // Create searcher
+            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass);
+            if (!so.success)
+            {
+                Console.WriteLine("[!] Failed to create directory searcher..");
+                return;
+            }
+            DirectorySearcher ds = so.searcher;
+
+            // Search filter
+            ds.Filter = sObject;
+
+            // Enum
+            try
+            {
+                // Search
+                SearchResultCollection oObject = ds.FindAll();
+
+                // Did we get 1 result back?
+                if (oObject.Count == 0)
+                {
+                    Console.WriteLine("[!] Object not found..");
+                    return;
+                }
+                else if (oObject.Count > 1)
+                {
+                    Console.WriteLine("[!] Invalid search, multiple results returned..");
+                    return;
+                }
+
+                // Account details
+                foreach (SearchResult sr in oObject)
+                {
+                    try
+                    {
+                        DirectoryEntry mde = sr.GetDirectoryEntry();
+                        Console.WriteLine("[?] Object   : " + mde.Name);
+                        Console.WriteLine("    Path     : " + mde.Path);
+
+                        ResultPropertyCollection omProps = sr.Properties;
+
+                        ArrayList servicePrincipalName = new ArrayList();
+
+                        try
+                        {
+                            foreach (var element in omProps["servicePrincipalName"])
+                            {
+                                servicePrincipalName.Add(element.ToString());
+                            }
+                        }
+                        catch
+                        {
+                            Console.WriteLine("[!] Failed to get servicePrincipalName property..");
+                            return;
+                        }
+
+                        Console.WriteLine("\n[*] SamAccountName           : " + omProps["samAccountName"][0].ToString());
+                        Console.WriteLine("    DistinguishedName        : " + omProps["distinguishedName"][0].ToString());
+
+                        if (omProps["servicePrincipalName"].Count > 0)
+                        {
+                            Console.WriteLine("    ServicePrincipalName     : " + String.Join(", ", servicePrincipalName.ToArray()));
+
+                        } else
+                        {
+                            Console.WriteLine("    ServicePrincipalName     : There is no ServicePrincipalName for this object");
+                        }
+
+                        if (!bRemove)
+                        {
+                            if (servicePrincipalName.Contains(sPrincipalName))
+                            {
+                                Console.WriteLine("\n[!] ServicePrincipalName already exists in spn object list..");
+                                return;
+                            }
+
+                            Console.WriteLine("\n[+] Adding servicePrincipalName : " + sPrincipalName);
+
+                            servicePrincipalName.Add(sPrincipalName);
+
+                            mde.Properties["servicePrincipalName"].Value = (Array)servicePrincipalName.ToArray();
+
+                        }
+                        else
+                        {
+                            if (servicePrincipalName.Count == 0)
+                            {
+                                Console.WriteLine("\n[!] The object does not contains ServicePrincipalName..");
+                                return;
+                            }
+
+                            if (!servicePrincipalName.Contains(sPrincipalName))
+                            {
+                                Console.WriteLine("\n[!] ServicePrincipalName does not exists in spn object list, can't be removed..");
+                                return;
+                            }
+
+                            Console.WriteLine("\n[+] Removing servicePrincipalName : " + sPrincipalName);
+
+                            servicePrincipalName.Remove(sPrincipalName);
+
+                            mde.Properties["servicePrincipalName"].Value = (Array)servicePrincipalName.ToArray();
+
+                        }
+
+                        mde.CommitChanges();
+                        servicePrincipalName.Clear();
+                        Console.WriteLine("    |_ Success");
+
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("[!] Failed to update servicePrincipalName ..");
+                        if (ex.InnerException != null)
+                        {
+                            Console.WriteLine("    |_ " + ex.InnerException.Message);
+                        }
+                        else
+                        {
+                            Console.WriteLine("    |_ " + ex.Message);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[!] Failed to enumerate accounts..");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine("    |_ " + ex.InnerException.Message);
+                }
+                else
+                {
+                    Console.WriteLine("    |_ " + ex.Message);
+                }
+            }
+        }
+
 
         public static void getDelegationAccounts(String sDomain = "", String sUser = "", String sPass = "")
         {
@@ -1550,6 +1713,12 @@ namespace StandIn
             [Option(null, "spn")]
             public Boolean bSPN { get; set; }
 
+            [Option(null, "add")]
+            public Boolean bAdd { get; set; }
+
+            [Option(null, "sPrincipalName")]
+            public String sPrincipalName { get; set; }
+
             [Option(null, "dc")]
             public Boolean bDc { get; set; }
 
@@ -1655,6 +1824,18 @@ namespace StandIn
                                 {
                                     setASREP(ArgOptions.sObject, false, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
                                 }
+                            }
+                            else if (ArgOptions.bSPN)
+                            {
+                                if (ArgOptions.bAdd)
+                                {
+                                    setSPN(ArgOptions.sObject, ArgOptions.sPrincipalName, false, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                }
+                                else if (ArgOptions.bRemove)
+                                {
+                                    setSPN(ArgOptions.sObject, ArgOptions.sPrincipalName, true, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                }
+
                             }
                             else
                             {
