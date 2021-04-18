@@ -1455,6 +1455,142 @@ namespace StandIn
             }
         }
 
+        public static void getPasswdNotReqdAccounts(String sDomain = "", String sUser = "", String sPass = "")
+        {
+            // Create searcher
+            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass);
+            if (!so.success)
+            {
+                Console.WriteLine("[!] Failed to create directory searcher..");
+                return;
+            }
+            DirectorySearcher ds = so.searcher;
+
+            // ASREP filter
+            ds.Filter = "(&(userAccountControl:1.2.840.113556.1.4.803:=32)(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))";
+
+            // Enum
+            try
+            {
+                // Search
+                SearchResultCollection oObject = ds.FindAll();
+                Console.WriteLine("\n[?] Found " + oObject.Count + " object(s) that do not require password..");
+
+                // Account details
+                foreach (SearchResult sr in oObject)
+                {
+                    try
+                    {
+                        DirectoryEntry mde = sr.GetDirectoryEntry();
+                        ResultPropertyCollection omProps = sr.Properties;
+
+                        Console.WriteLine("\n[*] SamAccountName           : " + omProps["samAccountName"][0].ToString());
+                        Console.WriteLine("    DistinguishedName        : " + omProps["distinguishedName"][0].ToString());
+
+                        long lastPwdSet = 0;
+                        try
+                        {
+                            lastPwdSet = (long)omProps["pwdlastset"][0];
+                        }
+                        catch { }
+
+                        if (lastPwdSet == long.MaxValue)
+                        {
+                            Console.WriteLine("    PwdLastSet               : 0x7FFFFFFFFFFFFFFF");
+                        }
+                        else if (lastPwdSet == 0)
+                        {
+                            Console.WriteLine("    PwdLastSet               : 0x0");
+                        }
+                        else
+                        {
+                            Console.WriteLine("    PwdLastSet               : " + DateTime.FromFileTimeUtc((long)omProps["pwdlastset"][0]) + " UTC");
+                        }
+
+                        try
+                        {
+                            long logonTimestamp = (long)omProps["lastlogon"][0];
+                            if (logonTimestamp == long.MaxValue)
+                            {
+                                Console.WriteLine("    lastlogon                : 0x7FFFFFFFFFFFFFFF");
+                            }
+                            else if (logonTimestamp == 0)
+                            {
+                                Console.WriteLine("    lastlogon                : 0x0");
+                            }
+                            else
+                            {
+                                Console.WriteLine("    lastlogon                : " + DateTime.FromFileTimeUtc((long)omProps["lastlogon"][0]) + " UTC");
+                            }
+                        }
+                        catch
+                        {
+                            try
+                            {
+                                long logonTimestamp = (long)omProps["lastlogontimestamp"][0];
+                                if (logonTimestamp == long.MaxValue)
+                                {
+                                    Console.WriteLine("    lastlogontimestamp       : 0x7FFFFFFFFFFFFFFF");
+                                }
+                                else if (logonTimestamp == 0)
+                                {
+                                    Console.WriteLine("    lastlogontimestamp       : 0x0");
+                                }
+                                else
+                                {
+                                    Console.WriteLine("    lastlogontimestamp       : " + DateTime.FromFileTimeUtc((long)omProps["lastlogontimestamp"][0]) + " UTC");
+                                }
+                            }
+                            catch
+                            {
+                                Console.WriteLine("    lastlogontimestamp       : N/A");
+                            }
+                        }
+
+                        UInt32 iDelegateCount = 0;
+                        foreach (Object oColl in omProps["msds-allowedtodelegateto"])
+                        {
+                            if (iDelegateCount == 0)
+                            {
+                                Console.WriteLine("    msDS-AllowedToDelegateTo : " + oColl);
+                            }
+                            else
+                            {
+                                Console.WriteLine("                               " + oColl);
+                            }
+                            iDelegateCount += 1;
+                        }
+                        Console.WriteLine("    userAccountControl       : " + (hStandIn.USER_ACCOUNT_CONTROL)omProps["useraccountcontrol"][0]);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("[!] Failed to enumerate DirectoryEntry properties..");
+                        if (ex.InnerException != null)
+                        {
+                            Console.WriteLine("    |_ " + ex.InnerException.Message);
+                        }
+                        else
+                        {
+                            Console.WriteLine("    |_ " + ex.Message);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[!] Failed to enumerate accounts..");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine("    |_ " + ex.InnerException.Message);
+                }
+                else
+                {
+                    Console.WriteLine("    |_ " + ex.Message);
+                }
+            }
+        }
+
+
         public static void GetADDomainControllers()
         {
             try
@@ -1568,6 +1704,9 @@ namespace StandIn
             [Option(null, "access")]
             public Boolean bAccess { get; set; }
 
+            [Option(null, "passwdnotreqd")]
+            public Boolean bPasswdNotReqd { get; set; }
+
             [Option(null, "help")]
             public Boolean bHelp { get; set; }
         }
@@ -1583,7 +1722,7 @@ namespace StandIn
                 }
                 else
                 {
-                    if (!String.IsNullOrEmpty(ArgOptions.sComp) || !String.IsNullOrEmpty(ArgOptions.sObject) || !String.IsNullOrEmpty(ArgOptions.sGroup) || ArgOptions.bSPN || ArgOptions.bDelegation || ArgOptions.bAsrep || ArgOptions.bDc)
+                    if (!String.IsNullOrEmpty(ArgOptions.sComp) || !String.IsNullOrEmpty(ArgOptions.sObject) || !String.IsNullOrEmpty(ArgOptions.sGroup) || ArgOptions.bSPN || ArgOptions.bDelegation || ArgOptions.bAsrep || ArgOptions.bPasswdNotReqd || ArgOptions.bDc)
                     {
                         if (!String.IsNullOrEmpty(ArgOptions.sComp))
                         {
@@ -1683,6 +1822,10 @@ namespace StandIn
                         else if (ArgOptions.bAsrep)
                         {
                             getASREPAccounts(ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                        }
+                        else if (ArgOptions.bPasswdNotReqd)
+                        {
+                            getPasswdNotReqdAccounts(ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
                         }
                         else if (ArgOptions.bDc)
                         {

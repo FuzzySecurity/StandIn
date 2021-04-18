@@ -151,6 +151,10 @@ namespace StandIn
                               "StandIn.exe --delegation\n" +
                               "StandIn.exe --delegation --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
 
+                              "# Get a list of all accounts that do not require a password\n" +
+                              "StandIn.exe --passwordnotreqd\n" +
+                              "StandIn.exe --passwordnotreqd --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
                               "# Get a list of all domain controllers\n" +
                               "StandIn.exe --dc\n\n" +
 
