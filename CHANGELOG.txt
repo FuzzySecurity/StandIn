@@ -1,0 +1,24 @@
+-=v0.7=-
+- Initial release.
+
+-=v0.8=-
+- Expanded delegation information pulled back.
+- GUID based rights assignment.
+- Added detection information.
+
+-=v1.2=-
+- A number of old and new functions now support new parameters "--limit" and "--filter".
+- Added generic LDAP search capabilities.
+- Added function which takes a user or SID and converts it to a user and SID.
+- Modified the "--group" function. It will now either enumerate group members as before or if provided with a user, list user group memberships.
+- Added function to remove a user from a group.
+- Added function which finds all GPO objects, optionally displays their ACL.
+- Added function to abuse GPO permissions and add a user to the local BUILTIN\Administrators group.
+- Added function to abuse GPO permissions and add a token permission to a user (e.g. SeLoadDriverPrivilege).
+- Added function to abuse GPO permissions and add a User or Computer immediate task with or without special filtering.
+- Added function which can increase the User or Computer version of GPO AD objects.
+- Added function which lists out some default domain policy settings (e.g. MaximumPasswordAge).
+- Added function which can do DNS enumeration based on AD records (ADIDNS).
+- Added function which can identify accounts that have PASSWD_NOTREQD as part of their userAccountControl flags.
+- Added function which can set an SPN on an account or remove it.
+- Bugfix in "--spn" where it would only show the first SPN.

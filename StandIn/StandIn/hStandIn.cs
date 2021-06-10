@@ -1,19 +1,46 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.DirectoryServices;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Net;
 
 namespace StandIn
 {
 	class hStandIn
 	{
-		[StructLayout(LayoutKind.Sequential)]
+        [DllImport("ntdll.dll")]
+        public static extern void RtlZeroMemory(
+            IntPtr Destination,
+            int length);
+
+        [StructLayout(LayoutKind.Sequential)]
 		public struct SearchObject
 		{
 			public Boolean success;
 			public String sDC;
 			public DirectorySearcher searcher;
 		}
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct GPOVersion
+        {
+            public UInt16 iUserVersion;
+            public UInt16 iComputerVersion;
+        }
+
+        // https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/f97756c9-3783-428b-9451-b376f877319a
+        [StructLayout(LayoutKind.Sequential)]
+        public struct DnssrvRpcRecord
+        {
+            public UInt16 wDataLength;
+            public UInt16 wType;
+            public UInt32 dwFlags;
+            public UInt32 dwSerial;
+            public UInt32 dwTtlSeconds;
+            public UInt32 dwTimeStamp;
+            public UInt32 dwReserved;
+        }
 
         public enum AccessRequest : UInt32
         {
@@ -83,39 +110,115 @@ namespace StandIn
             SAM_ACCOUNT_TYPE_MAX = 0x7fffffff
         }
 
+        public static List<String> userTokenRights = new List<String> {
+            "SeTrustedCredManAccessPrivilege",
+            "SeNetworkLogonRight",
+            "SeTcbPrivilege",
+            "SeMachineAccountPrivilege",
+            "SeIncreaseQuotaPrivilege",
+            "SeInteractiveLogonRight",
+            "SeRemoteInteractiveLogonRight",
+            "SeBackupPrivilege",
+            "SeChangeNotifyPrivilege",
+            "SeSystemtimePrivilege",
+            "SeTimeZonePrivilege",
+            "SeCreatePagefilePrivilege",
+            "SeCreateTokenPrivilege",
+            "SeCreateGlobalPrivilege",
+            "SeCreatePermanentPrivilege",
+            "SeCreateSymbolicLinkPrivilege",
+            "SeDebugPrivilege",
+            "SeDenyNetworkLogonRight",
+            "SeDenyBatchLogonRight",
+            "SeDenyServiceLogonRight",
+            "SeDenyInteractiveLogonRight",
+            "SeDenyRemoteInteractiveLogonRight",
+            "SeEnableDelegationPrivilege",
+            "SeRemoteShutdownPrivilege",
+            "SeAuditPrivilege",
+            "SeImpersonatePrivilege",
+            "SeIncreaseWorkingSetPrivilege",
+            "SeIncreaseBasePriorityPrivilege",
+            "SeLoadDriverPrivilege",
+            "SeLockMemoryPrivilege",
+            "SeBatchLogonRight",
+            "SeServiceLogonRight",
+            "SeSecurityPrivilege",
+            "SeRelabelPrivilege",
+            "SeSystemEnvironmentPrivilege",
+            "SeManageVolumePrivilege",
+            "SeProfileSingleProcessPrivilege",
+            "SeSystemProfilePrivilege",
+            "SeUndockPrivilege",
+            "SeAssignPrimaryTokenPrivilege",
+            "SeRestorePrivilege",
+            "SeShutdownPrivilege",
+            "SeSyncAgentPrivilege",
+            "SeTakeOwnershipPrivilege"
+        };
+
         public static void getHelp()
 		{
 			Console.WriteLine(@"  __               ");
 			Console.WriteLine(@" ( _/_   _//   ~b33f");
-			Console.WriteLine(@"__)/(//)(/(/)  v0.8");
+			Console.WriteLine(@"__)/(//)(/(/)  v1.2");
             Console.WriteLine(@"");
             string HelpText = "\n >--~~--> Args? <--~~--<\n\n" +
-							  "--help        This help menu\n" +
-                              "--object      LDAP filter, e.g. samaccountname=HWest\n" +
-                              "--computer    Machine name, e.g. Celephais-01\n" +
-                              "--group       Group name, e.g. \"Necronomicon Admins\"\n" +
-                              "--ntaccount   User name, e.g. \"REDHOOK\\UPickman\"\n" +
-                              "--sid         String SID representing a target machine\n" +
-                              "--grant       User name, e.g. \"REDHOOK\\KMason\"\n" +
-                              "--guid        Rights GUID to add to object, e.g. 1131f6aa-9c07-11d1-f79f-00c04fc2dcd2\n" +
-                              "--domain      Domain name, e.g. REDHOOK\n" +
-							  "--user        User name\n" +
-							  "--pass        Password\n" +
-                              "--newpass     New password to set for object\n" +
-                              "--type        Rights type: GenericAll, GenericWrite, ResetPassword, WriteMembers, DCSync\n" +
-                              "--spn         Boolean, list kerberoastable accounts\n" +
-                              "--delegation  Boolean, list accounts with unconstrained / constrained delegation\n" +
-                              "--asrep       Boolean, list ASREP roastable accounts\n" +
-                              "--dc          Boolean, list all domain controllers\n" +
-                              "--remove      Boolean, remove msDS-AllowedToActOnBehalfOfOtherIdentity property from machine object\n" +
-							  "--make        Boolean, make machine; ms-DS-MachineAccountQuota applies\n" +
-							  "--disable     Boolean, disable machine; should be the same user that created the machine\n" +
-                              "--access      Boolean, list access permissions for object\n" +
-                              "--delete      Boolean, delete machine from AD; requires elevated AD access\n\n" +
+							  "--help          This help menu\n" +
+                              "--object        LDAP filter, e.g. samaccountname=HWest\n" +
+                              "--ldap          LDAP filter, can return result collection\n" +
+                              "--filter        Filter results, varies based on function\n" +
+                              "--limit         Limit results, varies based on function, defaults to 50\n" +
+                              "--computer      Machine name, e.g. Celephais-01\n" +
+                              "--group         samAccountName, e.g. \"Necronomicon Admins\"\n" +
+                              "--ntaccount     User name, e.g. \"REDHOOK\\UPickman\"\n" +
+                              "--sid           Dependent on context\n" +
+                              "--grant         User name, e.g. \"REDHOOK\\KMason\"\n" +
+                              "--guid          Rights GUID to add to object, e.g. 1131f6aa-9c07-11d1-f79f-00c04fc2dcd2\n" +
+                              "--domain        Domain name, e.g. REDHOOK\n" +
+							  "--user          User name\n" +
+							  "--pass          Password\n" +
+                              "--newpass       New password to set for object\n" +
+                              "--gpo           List group policy objects\n" +
+                              "--acl           Show ACL's for returned GPO's\n" +
+                              "--localadmin    Add samAccountName to BUILTIN\\Administrators for vulnerable GPO\n" +
+                              "--setuserrights samAccountName for which to add token rights in a vulnerable GPO\n" +
+                              "--tasktype      Immediate task type (user/computer)\n" +
+                              "--taskname      Immediate task name\n" +
+                              "--author        Immediate task author\n" +
+                              "--command       Immediate task command\n" +
+                              "--args          Immediate task command args\n" +
+                              "--target        Optional, filter for DNS name or NTAccount\n" +
+                              "--targetsid     Optional, provider user SID\n" +
+                              "--increase      Increment either the user or computer GPO version number for the AD object\n" +
+                              "--policy        Reads some account/kerberos properties from the \"Default Domain Policy\"\n" +
+                              "--dns           Performs ADIDNS enumeration, supports wildcard filters\n" +
+                              "--legacy        Boolean, sets DNS seach root to legacy (CN=System)\n" +
+                              "--forest        Boolean, sets DNS seach root to forest (DC=ForestDnsZones)\n" +
+                              "--passnotreq    Boolean, list accounts that have PASSWD_NOTREQD set\n" +
+                              "--type          Rights type: GenericAll, GenericWrite, ResetPassword, WriteMembers, DCSync\n" +
+                              "--spn           Boolean, list kerberoastable accounts\n" +
+                              "--setspn        samAccountName for which to add/remove an SPN\n" +
+                              "--principal     Principal name to add to samAccountName (e.g. MSSQL/VermisMysteriis)\n" +
+                              "--delegation    Boolean, list accounts with unconstrained / constrained delegation\n" +
+                              "--asrep         Boolean, list ASREP roastable accounts\n" +
+                              "--dc            Boolean, list all domain controllers\n" +
+                              "--add           Boolean, context dependent group/spn\n" +
+                              "--remove        Boolean, context dependent msDS-AllowedToActOnBehalfOfOtherIdentity/group\n" +
+							  "--make          Boolean, make machine; ms-DS-MachineAccountQuota applies\n" +
+							  "--disable       Boolean, disable machine; should be the same user that created the machine\n" +
+                              "--access        Boolean, list access permissions for object\n" +
+                              "--delete        Boolean, delete machine from AD; requires elevated AD access\n\n" +
 							  " >--~~--> Usage? <--~~--<\n\n" +
-							  "# Query object properties by LDAP filter\n" +
+                              "# Perform LDAP search\n" +
+                              "StandIn.exe --ldap \"(&(samAccountType=805306368)(servicePrincipalName=*)(!samAccountName=krbtgt)(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))\"\n" +
+                              "StandIn.exe --ldap servicePrincipalName=* --domain redhook --user RFludd --pass Cl4vi$Alchemi4e --limit 10\n" +
+                              "StandIn.exe --ldap servicePrincipalName=* --filter \"pwdlastset, distinguishedname, lastlogon\" --limit 100\n\n" +
+
+                              "# Query object properties by LDAP filter\n" +
                               "StandIn.exe --object \"(&(samAccountType=805306368)(servicePrincipalName=*vermismysteriis.redhook.local*))\"\n" +
-                              "StandIn.exe --object samaccountname=Celephais-01$ --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+                              "StandIn.exe --object samaccountname=Celephais-01$ --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n" +
+                              "StandIn.exe --object samaccountname=Celephais-01$ --filter \"pwdlastset, serviceprincipalname, objectsid\"\n\n" +
 
                               "# Query object access permissions, optionally filter by NTAccount\n" +
                               "StandIn.exe --object \"distinguishedname=DC=redhook,DC=local\" --access\n" +
@@ -143,9 +246,54 @@ namespace StandIn
                               "StandIn.exe --asrep\n" +
                               "StandIn.exe --asrep --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
 
+                              "# Return GPO objects, optionally wildcard filter and get ACL's\n" +
+                              "StandIn.exe --gpo --limit 20\n" +
+                              "StandIn.exe --gpo --filter admin --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n" +
+                              "StandIn.exe --gpo --filter admin --acl --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
+                              "# Add samAccountName to BUILTIN\\Administrators for vulnerable GPO\n" +
+                              "StandIn.exe --gpo --filter ArcanePolicy --localadmin JCurwen\n" +
+                              "StandIn.exe --gpo --filter ArcanePolicy --localadmin JCurwen --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
+                              "# Add token rights to samAccountName in a vulnerable GPO\n" +
+                              "StandIn.exe --gpo --filter ArcanePolicy --setuserrights JCurwen --grant \"SeTcbPrivilege,SeDebugPrivilege\"\n" +
+                              "StandIn.exe --gpo --filter ArcanePolicy --setuserrights JCurwen --grant SeLoadDriverPrivilege --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
+                              "# Add user/computer immediate task and optionally filter\n" +
+                              "StandIn.exe --gpo --filter ArcanePolicy --taskname LiberInvestigationis --tasktype computer --author \"REDHOOK\\JCurwen\" --command \"C:\\Windows\\System32\\notepad.exe\" --args \"C:\\Mysteriis\\CultesDesGoules.txt\"\n" +
+                              "StandIn.exe --gpo --filter ArcanePolicy --taskname LiberInvestigationis --tasktype computer --author \"REDHOOK\\JCurwen\" --command \"C:\\Windows\\System32\\notepad.exe\" --args \"C:\\Mysteriis\\CultesDesGoules.txt\" --target Rllyeh.redhook.local\n" +
+                              "StandIn.exe --gpo --filter ArcanePolicy --taskname LiberInvestigationis --tasktype user --author \"REDHOOK\\JCurwen\" --command \"C:\\Windows\\System32\\notepad.exe\" --args \"C:\\Mysteriis\\CultesDesGoules.txt\" --target \"REDHOOK\\RBloch\" --targetsid S-1-5-21-315358687-3711474269-2098994107-1106\n" +
+                              "StandIn.exe --gpo --filter ArcanePolicy --taskname LiberInvestigationis --tasktype computer --author \"REDHOOK\\JCurwen\" --command \"C:\\Windows\\System32\\notepad.exe\" --args \"C:\\Mysteriis\\CultesDesGoules.txt\" --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
+                              "# Increment either the user or computer GPO version number for the AD object\n" +
+                              "StandIn.exe --gpo --filter ArcanePolicy --increase --tasktype user\n" +
+                              "StandIn.exe --gpo --filter ArcanePolicy --increase --tasktype computer --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
+                              "# Read Default Domain Policy\n" +
+                              "StandIn.exe --policy\n" +
+                              "StandIn.exe --policy --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
+                              "# Perform ADIDNS searches\n" +
+                              "StandIn.exe --dns --limit 20\n" +
+                              "StandIn.exe --dns --filter SQL --limit 10\n" +
+                              "StandIn.exe --dns --forest --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n" +
+                              "StandIn.exe --dns --legacy --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
+                              "# List account that have PASSWD_NOTREQD set\n" +
+                              "StandIn.exe --passnotreq\n" +
+                              "StandIn.exe --passnotreq --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
+                              "# Get user and SID from either a SID or a samAccountName\n" +
+                              "StandIn.exe --sid JCurwen\n" +
+                              "StandIn.exe --sid S-1-5-21-315358687-3711474269-2098994107-1105 --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
                               "# Get a list of all kerberoastable accounts\n" +
                               "StandIn.exe --spn\n" +
                               "StandIn.exe --spn --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
+                              "# Add/remove SPN from samAccountName\n" +
+                              "StandIn.exe --setspn RSuydam --principal MSSQL/VermisMysteriis --add\n" +
+                              "StandIn.exe --setspn RSuydam --principal MSSQL/VermisMysteriis --remove --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
 
                               "# List all accounts with unconstrained & constrained delegation privileges\n" +
                               "StandIn.exe --delegation\n" +
@@ -154,13 +302,18 @@ namespace StandIn
                               "# Get a list of all domain controllers\n" +
                               "StandIn.exe --dc\n\n" +
 
-                              "# List group members\n" +
+                              "# List members of group or list user group membership\n" +
                               "StandIn.exe --group Literarum\n" +
-                              "StandIn.exe --group \"Magna Ultima\" --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+                              "StandIn.exe --group \"Magna Ultima\" --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n" +
+                              "StandIn.exe --group JCurwen --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
 
                               "# Add user to group\n" +
-                              "StandIn.exe --group \"Dunwich Council\" --ntaccount \"REDHOOK\\WWhateley\"\n" +
-                              "StandIn.exe --group DAgon --ntaccount \"REDHOOK\\RCarter\" --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+                              "StandIn.exe --group \"Dunwich Council\" --ntaccount \"REDHOOK\\WWhateley\" --add\n" +
+                              "StandIn.exe --group DAgon --ntaccount \"REDHOOK\\RCarter\" --add --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
+                              "# Remove user from group\n" +
+                              "StandIn.exe --group \"Dunwich Council\" --ntaccount \"REDHOOK\\WWhateley\" --remove\n" +
+                              "StandIn.exe --group DAgon --ntaccount \"REDHOOK\\RCarter\" --remove --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
 
                               "# Create machine object\n" +
                               "StandIn.exe --computer Innsmouth --make\n" +
@@ -328,5 +481,188 @@ namespace StandIn
 			}
 			return sb.ToString();
 		}
-	}
+
+        public static GPOVersion UInt32ToGPOVersion(UInt32 iGPOVersion)
+        {
+            IntPtr pGPO = Marshal.AllocHGlobal(4);
+            RtlZeroMemory(pGPO, 4);
+            Marshal.WriteInt32(pGPO, (Int32)iGPOVersion);
+
+            GPOVersion gv = new GPOVersion();
+            gv.iComputerVersion = (UInt16)Marshal.ReadInt16(pGPO);
+            gv.iUserVersion = (UInt16)Marshal.ReadInt16((IntPtr)(pGPO.ToInt64() + 2));
+
+            Marshal.FreeHGlobal(pGPO);
+
+            return gv;
+        }
+
+        public static UInt32 GPOVersionToUInt32(GPOVersion oGPOVersion)
+        {
+            IntPtr pGPO = Marshal.AllocHGlobal(4);
+            RtlZeroMemory(pGPO, 4);
+            Marshal.WriteInt16(pGPO, (Int16)oGPOVersion.iComputerVersion);
+            Marshal.WriteInt16((IntPtr)(pGPO.ToInt64() + 2), (Int16)oGPOVersion.iUserVersion);
+
+            UInt32 iResVal = (UInt32)Marshal.ReadInt32(pGPO);
+            Marshal.FreeHGlobal(pGPO);
+
+            return iResVal;
+        }
+
+        public static UInt32 IncrementGPOVersion(GPOVersion oGPOVersion, Boolean bUser, Boolean bComputer)
+        {
+            if (bUser)
+            {
+                if (oGPOVersion.iUserVersion == 0xffff) {
+                    oGPOVersion.iUserVersion = 1;
+                } else
+                {
+                    oGPOVersion.iUserVersion += 1;
+                }
+            }
+
+            if (bComputer)
+            {
+                if (oGPOVersion.iComputerVersion == 0xffff) {
+                    oGPOVersion.iComputerVersion = 1;
+                }
+                else
+                {
+                    oGPOVersion.iComputerVersion += 1;
+                }
+            }
+
+            return GPOVersionToUInt32(oGPOVersion);
+        }
+
+        public static Int16 getInt16ToBigEndian(Int16 iInput)
+        {
+            byte[] aBytes = BitConverter.GetBytes(iInput);
+            Array.Reverse(aBytes);
+            return BitConverter.ToInt16(aBytes, 0);
+        }
+
+        public static Int32 getInt32ToBigEndian(Int32 iInput)
+        {
+            byte[] aBytes = BitConverter.GetBytes(iInput);
+            Array.Reverse(aBytes);
+            return BitConverter.ToInt32(aBytes, 0);
+        }
+
+        public static void ReadDNSObject(Byte[] arrObj)
+        {
+            IntPtr pObject = Marshal.AllocHGlobal(arrObj.Length);
+            Marshal.Copy(arrObj, 0, pObject, arrObj.Length);
+
+            DnssrvRpcRecord oRecord = (DnssrvRpcRecord)Marshal.PtrToStructure(pObject, typeof(DnssrvRpcRecord));
+            IntPtr pData = (IntPtr)(pObject.ToInt64() + 24);
+
+            if (oRecord.wType == 1)
+            {
+                byte[] bytes = BitConverter.GetBytes(Marshal.ReadInt32(pData));
+                Console.WriteLine("    |_ DNS_RPC_RECORD_A : " + new IPAddress(bytes).ToString());
+            }
+            else if (oRecord.wType == 2 || oRecord.wType == 5 || oRecord.wType == 12)
+            {
+                Int16 iLen = Marshal.ReadByte(pData);
+                Int16 iSeg = Marshal.ReadByte((IntPtr)(pData.ToInt64() + 1));
+                IntPtr pDataPtr = (IntPtr)(pData.ToInt64() + 2);
+                String sRecord = String.Empty;
+                for (int i=0; i < iSeg; i++)
+                {
+                    Int16 iSegLen = Marshal.ReadByte(pDataPtr);
+                    sRecord += Marshal.PtrToStringAnsi((IntPtr)(pDataPtr.ToInt64() + 1), iSegLen);
+                    if (i != (iSeg-1))
+                    {
+                        sRecord += ".";
+                    }
+                    pDataPtr = (IntPtr)(pDataPtr.ToInt64() + iSegLen + 1);
+                }
+                Console.WriteLine("    |_ DNS_RPC_RECORD_NODE_NAME : " + sRecord);
+            }
+            else if (oRecord.wType == 33)
+            {
+                Int16 iPrio = getInt16ToBigEndian(Marshal.ReadInt16(pData));
+                Int16 iWeight = getInt16ToBigEndian(Marshal.ReadInt16((IntPtr)(pData.ToInt64() + 2)));
+                Int16 iPort = getInt16ToBigEndian(Marshal.ReadInt16((IntPtr)(pData.ToInt64() + 4)));
+                Int16 iSeg = Marshal.ReadByte((IntPtr)(pData.ToInt64() + 7));
+                IntPtr pDataPtr = (IntPtr)(pData.ToInt64() + 8);
+                String sRecord = String.Empty;
+                for (int i = 0; i < iSeg; i++)
+                {
+                    Int16 iSegLen = Marshal.ReadByte(pDataPtr);
+                    sRecord += Marshal.PtrToStringAnsi((IntPtr)(pDataPtr.ToInt64() + 1), iSegLen);
+                    if (i != (iSeg - 1))
+                    {
+                        sRecord += ".";
+                    }
+                    pDataPtr = (IntPtr)(pDataPtr.ToInt64() + iSegLen + 1);
+                }
+                Console.WriteLine("    |_ DNS_RPC_RECORD_SRV");
+                Console.WriteLine("       |_ Priority : " + iPrio);
+                Console.WriteLine("       |_ Weight   : " + iWeight);
+                Console.WriteLine("       |_ Port     : " + iPort);
+                Console.WriteLine("       |_ Name     : " + sRecord);
+            }
+            else if (oRecord.wType == 6)
+            {
+                Int32 iSerial = getInt32ToBigEndian(Marshal.ReadInt32(pData));
+                Int32 iRefresh = getInt32ToBigEndian(Marshal.ReadInt32((IntPtr)(pData.ToInt64() + 4)));
+                Int32 iRetry = getInt32ToBigEndian(Marshal.ReadInt32((IntPtr)(pData.ToInt64() + 8)));
+                Int32 iExpire = getInt32ToBigEndian(Marshal.ReadInt32((IntPtr)(pData.ToInt64() + 12)));
+                Int32 iMinimumTtl = getInt32ToBigEndian(Marshal.ReadInt32((IntPtr)(pData.ToInt64() + 16)));
+
+                Int16 iLen = Marshal.ReadByte((IntPtr)(pData.ToInt64() + 20));
+                Int16 iSeg = Marshal.ReadByte((IntPtr)(pData.ToInt64() + 21));
+                IntPtr pDataPtr = (IntPtr)(pData.ToInt64() + 22);
+                String sNamePrimaryServer = String.Empty;
+                for (int i = 0; i < iSeg; i++)
+                {
+                    Int16 iSegLen = Marshal.ReadByte(pDataPtr);
+                    sNamePrimaryServer += Marshal.PtrToStringAnsi((IntPtr)(pDataPtr.ToInt64() + 1), iSegLen);
+                    if (i != (iSeg - 1))
+                    {
+                        sNamePrimaryServer += ".";
+                    }
+                    pDataPtr = (IntPtr)(pDataPtr.ToInt64() + iSegLen + 1);
+                }
+
+                iSeg = Marshal.ReadByte((IntPtr)(pData.ToInt64() + 21 + iLen));
+                pDataPtr = (IntPtr)(pData.ToInt64() + 22 + iLen);
+                String sZoneAdminEmail = String.Empty;
+                for (int i = 0; i < iSeg; i++)
+                {
+                    Int16 iSegLen = Marshal.ReadByte(pDataPtr);
+                    sZoneAdminEmail += Marshal.PtrToStringAnsi((IntPtr)(pDataPtr.ToInt64() + 1), iSegLen);
+                    if (i != (iSeg - 1))
+                    {
+                        sZoneAdminEmail += ".";
+                    }
+                    pDataPtr = (IntPtr)(pDataPtr.ToInt64() + iSegLen + 1);
+                }
+
+                Console.WriteLine("    |_ DNS_RPC_RECORD_SOA");
+                Console.WriteLine("       |_ SerialNo      : " + iSerial);
+                Console.WriteLine("       |_ Refresh       : " + iRefresh);
+                Console.WriteLine("       |_ Retry         : " + iRetry);
+                Console.WriteLine("       |_ Expire        : " + iExpire);
+                Console.WriteLine("       |_ MinimumTtl    : " + iMinimumTtl);
+                Console.WriteLine("       |_ PrimaryServer : " + sNamePrimaryServer);
+                Console.WriteLine("       |_ AdminEmail    : " + sZoneAdminEmail);
+            }
+            else if (oRecord.wType == 28)
+            {
+                Byte[] bytes = (new ArraySegment<Byte>(arrObj, 24, 16)).Array;
+                Console.WriteLine("    |_ DNS_RPC_RECORD_AAAA : " + new IPAddress(bytes).ToString());
+            }
+            else
+            {
+                Console.WriteLine("    |_ Unimplemented DNS Record Type ---> " + oRecord.wType);
+                Console.WriteLine("       |_ DEBUG : " + BitConverter.ToString(arrObj).Replace("-", " "));
+            }
+
+            Marshal.FreeHGlobal(pObject);
+        }
+    }
 }
