@@ -15,10 +15,10 @@ namespace StandIn
 {
     class Program
     {
-        public static void returnObject(String sObject, String sDomain = "", String sUser = "", String sPass = "", String sFilter = "")
+        public static void returnObject(String sObject, String sDomain = "", String sUser = "", String sPass = "", String sFilter = "", String sPath = "")
         {
             // Create searcher
-            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass);
+            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass, sPath);
             if (!so.success)
             {
                 Console.WriteLine("[!] Failed to create directory searcher..");
@@ -192,10 +192,10 @@ namespace StandIn
             }
         }
 
-        public static void returnLDAP(String sLDAP, String sDomain = "", String sUser = "", String sPass = "", String sFilter = "", UInt32 iLimit = 0)
+        public static void returnLDAP(String sLDAP, String sDomain = "", String sUser = "", String sPass = "", String sPath = "", String sFilter = "", UInt32 iLimit = 0)
         {
             // Create searcher
-            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass);
+            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass, sPath);
             if (!so.success)
             {
                 Console.WriteLine("[!] Failed to create directory searcher..");
@@ -1347,7 +1347,7 @@ namespace StandIn
         public static void setAllowedToActOnBehalfOfOtherIdentity(String sMachineName, String sObjectSID, String sDomain = "", String sUser = "", String sPass = "")
         {
             // Create searcher
-            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass, true);
+            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass, "", true);
             if (!so.success)
             {
                 Console.WriteLine("[!] Failed to create directory searcher..");
@@ -1418,7 +1418,7 @@ namespace StandIn
         public static void removeAllowedToActOnBehalfOfOtherIdentity(String sMachineName, String sDomain = "", String sUser = "", String sPass = "")
         {
             // Create searcher
-            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass, true);
+            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass, "", true);
             if (!so.success)
             {
                 Console.WriteLine("[!] Failed to create directory searcher..");
@@ -1709,10 +1709,10 @@ namespace StandIn
             }
         }
 
-        public static void getObjectAccessPermissions(String sObject, String sNTAccount = "", String sDomain = "", String sUser = "", String sPass = "")
+        public static void getObjectAccessPermissions(String sObject, String sNTAccount = "", String sDomain = "", String sUser = "", String sPass = "", String sPath = "")
         {
             // Create searcher
-            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass);
+            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass, sPath);
             if (!so.success)
             {
                 Console.WriteLine("[!] Failed to create directory searcher..");
@@ -3348,6 +3348,9 @@ namespace StandIn
             [Option(null, "pass")]
             public String sPass { get; set; }
 
+            [Option(null, "path")]
+            public String sPath { get; set; }
+
             [Option(null, "grant")]
             public String sGrant { get; set; }
 
@@ -3511,7 +3514,7 @@ namespace StandIn
                         {
                             if (ArgOptions.bAccess)
                             {
-                                getObjectAccessPermissions(ArgOptions.sObject, ArgOptions.sNtaccount, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                getObjectAccessPermissions(ArgOptions.sObject, ArgOptions.sNtaccount, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass, ArgOptions.sPath);
                             }
                             else if (!String.IsNullOrEmpty(ArgOptions.sGrant))
                             {
@@ -3591,7 +3594,7 @@ namespace StandIn
                         }
                         else if (!String.IsNullOrEmpty(ArgOptions.sLdap))
                         {
-                            returnLDAP(ArgOptions.sLdap, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass, ArgOptions.sFilter, ArgOptions.iLimit);
+                            returnLDAP(ArgOptions.sLdap, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass, ArgOptions.sPath, ArgOptions.sFilter, ArgOptions.iLimit);
                         }
                         else if (ArgOptions.bGPO)
                         {
