@@ -203,6 +203,7 @@ namespace StandIn
                               "--delegation    Boolean, list accounts with unconstrained / constrained delegation\n" +
                               "--asrep         Boolean, list ASREP roastable accounts\n" +
                               "--dc            Boolean, list all domain controllers\n" +
+                              "--trust         Boolean, list all trust relationships\n" +
                               "--add           Boolean, context dependent group/spn\n" +
                               "--remove        Boolean, context dependent msDS-AllowedToActOnBehalfOfOtherIdentity/group\n" +
 							  "--make          Boolean, make machine; ms-DS-MachineAccountQuota applies\n" +
@@ -301,6 +302,9 @@ namespace StandIn
 
                               "# Get a list of all domain controllers\n" +
                               "StandIn.exe --dc\n\n" +
+
+                              "# Get a list of all trust relationships in the current domain\n" +
+                              "StandIn.exe --trust\n\n" +
 
                               "# List members of group or list user group membership\n" +
                               "StandIn.exe --group Literarum\n" +
