@@ -22,3 +22,11 @@
 - Added function which can identify accounts that have PASSWD_NOTREQD as part of their userAccountControl flags.
 - Added function which can set an SPN on an account or remove it.
 - Bugfix in "--spn" where it would only show the first SPN.
+
+-=v1.3=-
+- Added function to list ADCS templates
+- Added function to add/remove Client Authentication from ADCS template
+- Added function to add/remove ENROLLEE_SUPPLIES_SUBJECT from ADCS template
+- Added function to change ADCS template Owner
+- Added function to add/remove Write permissions on ADCS template
+- Added function to add/remove Certificate Enrollment permissions on ADCS template
