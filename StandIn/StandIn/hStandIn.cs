@@ -110,6 +110,52 @@ namespace StandIn
             SAM_ACCOUNT_TYPE_MAX = 0x7fffffff
         }
 
+        [Flags]
+        public enum msPKICertificateNameFlag : UInt32
+        {
+            ENROLLEE_SUPPLIES_SUBJECT = 0x00000001,
+            ADD_EMAIL = 0x00000002,
+            ADD_OBJ_GUID = 0x00000004,
+            OLD_CERT_SUPPLIES_SUBJECT_AND_ALT_NAME = 0x00000008,
+            ADD_DIRECTORY_PATH = 0x00000100,
+            ENROLLEE_SUPPLIES_SUBJECT_ALT_NAME = 0x00010000,
+            SUBJECT_ALT_REQUIRE_DOMAIN_DNS = 0x00400000,
+            SUBJECT_ALT_REQUIRE_SPN = 0x00800000,
+            SUBJECT_ALT_REQUIRE_DIRECTORY_GUID = 0x01000000,
+            SUBJECT_ALT_REQUIRE_UPN = 0x02000000,
+            SUBJECT_ALT_REQUIRE_EMAIL = 0x04000000,
+            SUBJECT_ALT_REQUIRE_DNS = 0x08000000,
+            SUBJECT_REQUIRE_DNS_AS_CN = 0x10000000,
+            SUBJECT_REQUIRE_EMAIL = 0x20000000,
+            SUBJECT_REQUIRE_COMMON_NAME = 0x40000000,
+            SUBJECT_REQUIRE_DIRECTORY_PATH = 0x80000000,
+        }
+
+        [Flags]
+        public enum msPKIEnrollmentFlag : UInt32
+        {
+            NONE = 0x00000000,
+            INCLUDE_SYMMETRIC_ALGORITHMS = 0x00000001,
+            PEND_ALL_REQUESTS = 0x00000002,
+            PUBLISH_TO_KRA_CONTAINER = 0x00000004,
+            PUBLISH_TO_DS = 0x00000008,
+            AUTO_ENROLLMENT_CHECK_USER_DS_CERTIFICATE = 0x00000010,
+            AUTO_ENROLLMENT = 0x00000020,
+            CT_FLAG_DOMAIN_AUTHENTICATION_NOT_REQUIRED = 0x80,
+            PREVIOUS_APPROVAL_VALIDATE_REENROLLMENT = 0x00000040,
+            USER_INTERACTION_REQUIRED = 0x00000100,
+            ADD_TEMPLATE_NAME = 0x200,
+            REMOVE_INVALID_CERTIFICATE_FROM_PERSONAL_STORE = 0x00000400,
+            ALLOW_ENROLL_ON_BEHALF_OF = 0x00000800,
+            ADD_OCSP_NOCHECK = 0x00001000,
+            ENABLE_KEY_REUSE_ON_NT_TOKEN_KEYSET_STORAGE_FULL = 0x00002000,
+            NOREVOCATIONINFOINISSUEDCERTS = 0x00004000,
+            INCLUDE_BASIC_CONSTRAINTS_FOR_EE_CERTS = 0x00008000,
+            ALLOW_PREVIOUS_APPROVAL_KEYBASEDRENEWAL_VALIDATE_REENROLLMENT = 0x00010000,
+            ISSUANCE_POLICIES_FROM_REQUEST = 0x00020000,
+            SKIP_AUTO_RENEWAL = 0x00040000
+        }
+
         public static List<String> userTokenRights = new List<String> {
             "SeTrustedCredManAccessPrivilege",
             "SeNetworkLogonRight",
@@ -161,7 +207,7 @@ namespace StandIn
 		{
 			Console.WriteLine(@"  __               ");
 			Console.WriteLine(@" ( _/_   _//   ~b33f");
-			Console.WriteLine(@"__)/(//)(/(/)  v1.2");
+			Console.WriteLine(@"__)/(//)(/(/)  v1.3");
             Console.WriteLine(@"");
             string HelpText = "\n >--~~--> Args? <--~~--<\n\n" +
 							  "--help          This help menu\n" +
@@ -203,8 +249,15 @@ namespace StandIn
                               "--delegation    Boolean, list accounts with unconstrained / constrained delegation\n" +
                               "--asrep         Boolean, list ASREP roastable accounts\n" +
                               "--dc            Boolean, list all domain controllers\n" +
-                              "--add           Boolean, context dependent group/spn\n" +
-                              "--remove        Boolean, context dependent msDS-AllowedToActOnBehalfOfOtherIdentity/group\n" +
+                              "--adcs          List all CA's and all published templates\n" +
+                              "--clientauth    Boolean, modify ADCS template to add/remove \"Client Authentication\"\n" +
+                              "--ess           Boolean, modify ADCS template to add/remove \"ENROLLEE_SUPPLIES_SUBJECT\"\n" +
+                              "--pend          Boolean, modify ADCS template to add/remove \"PEND_ALL_REQUESTS\"\n" +
+                              "--owner         Boolean, modify ADCS template owner\n" +
+                              "--write         Boolean, modify ADCS template, add/remove WriteDacl/WriteOwner/WriteProperty permission for NtAccount\n" +
+                              "--enroll        Boolean, modify ADCS template, add/remove \"Certificate-Enrollment\" permission for NtAccount\n" +
+                              "--add           Boolean, context dependent group/spn/adcs\n" +
+                              "--remove        Boolean, context dependent msDS-AllowedToActOnBehalfOfOtherIdentity/group/adcs\n" +
 							  "--make          Boolean, make machine; ms-DS-MachineAccountQuota applies\n" +
 							  "--disable       Boolean, disable machine; should be the same user that created the machine\n" +
                               "--access        Boolean, list access permissions for object\n" +
@@ -314,6 +367,35 @@ namespace StandIn
                               "# Remove user from group\n" +
                               "StandIn.exe --group \"Dunwich Council\" --ntaccount \"REDHOOK\\WWhateley\" --remove\n" +
                               "StandIn.exe --group DAgon --ntaccount \"REDHOOK\\RCarter\" --remove --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
+                              "# List CA's and all published templates, optionally wildcard filter on template name\n" +
+                              "StandIn.exe --adcs\n" +
+                              "StandIn.exe --adcs --filter Kingsport\n" +
+                              "StandIn.exe --adcs --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
+                              "# Add/remove \"Client Authentication\" from template pKIExtendedKeyUsage, filter should contain the exact name of the template\n" +
+                              "StandIn.exe --adcs --filter Kingsport --clientauth --add\n" +
+                              "StandIn.exe --adcs --filter Kingsport --clientauth --remove --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
+                              "# Add/remove \"ENROLLEE_SUPPLIES_SUBJECT\" from template msPKI-Certificate-Name-Flag, filter should contain the exact name of the template\n" +
+                              "StandIn.exe --adcs --filter Kingsport --ess --add\n" +
+                              "StandIn.exe --adcs --filter Kingsport --ess --remove --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
+                              "# Add/remove \"PEND_ALL_REQUESTS\" from template msPKI-Enrollment-Flag, filter should contain the exact name of the template\n" +
+                              "StandIn.exe --adcs --filter Kingsport --pend --add\n" +
+                              "StandIn.exe --adcs --filter Kingsport --pend --remove --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
+                              "# Change template owner, filter should contain the exact name of the template\n" +
+                              "StandIn.exe --adcs --filter Kingsport --ntaccount \"REDHOOK\\MBWillett\" --owner\n" +
+                              "StandIn.exe --adcs --filter Kingsport --ntaccount \"REDHOOK\\MBWillett\" --owner --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
+                              "# Grant NtAccount WriteDacl/WriteOwner/WriteProperty, filter should contain the exact name of the template\n" +
+                              "StandIn.exe --adcs --filter Kingsport --ntaccount \"REDHOOK\\MBWillett\" --write --add\n" +
+                              "StandIn.exe --adcs --filter Kingsport --ntaccount \"REDHOOK\\MBWillett\" --write --remove  --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
+                              "# Grant NtAccount \"Certificate-Enrollment\", filter should contain the exact name of the template\n" +
+                              "StandIn.exe --adcs --filter Kingsport --ntaccount \"REDHOOK\\MBWillett\" --enroll --add\n" +
+                              "StandIn.exe --adcs --filter Kingsport --ntaccount \"REDHOOK\\MBWillett\" --enroll --remove --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
 
                               "# Create machine object\n" +
                               "StandIn.exe --computer Innsmouth --make\n" +
@@ -663,6 +745,78 @@ namespace StandIn
             }
 
             Marshal.FreeHGlobal(pObject);
+        }
+
+        public static string ConvertPKIPeriod(byte[] bytes)
+        {
+            try
+            {
+                Array.Reverse(bytes);
+                var temp = BitConverter.ToString(bytes).Replace("-", "");
+                var value = Convert.ToInt64(temp, 16) * -.0000001;
+
+                if ((value % 31536000 == 0) && (value / 31536000) >= 1)
+                {
+                    if ((value / 31536000) == 1)
+                    {
+                        return "1 year";
+                    }
+
+                    return $"{value / 31536000} years";
+                }
+                else if ((value % 2592000 == 0) && (value / 2592000) >= 1)
+                {
+                    if ((value / 2592000) == 1)
+                    {
+                        return "1 month";
+                    }
+                    else
+                    {
+                        return $"{value / 2592000} months";
+                    }
+                }
+                else if ((value % 604800 == 0) && (value / 604800) >= 1)
+                {
+                    if ((value / 604800) == 1)
+                    {
+                        return "1 week";
+                    }
+                    else
+                    {
+                        return $"{value / 604800} weeks";
+                    }
+                }
+                else if ((value % 86400 == 0) && (value / 86400) >= 1)
+                {
+                    if ((value / 86400) == 1)
+                    {
+                        return "1 day";
+                    }
+                    else
+                    {
+                        return $"{value / 86400} days";
+                    }
+                }
+                else if ((value % 3600 == 0) && (value / 3600) >= 1)
+                {
+                    if ((value / 3600) == 1)
+                    {
+                        return "1 hour";
+                    }
+                    else
+                    {
+                        return $"{value / 3600} hours";
+                    }
+                }
+                else
+                {
+                    return "";
+                }
+            }
+            catch (Exception)
+            {
+                return "ERROR";
+            }
         }
     }
 }

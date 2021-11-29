@@ -10,6 +10,7 @@ using System.Security.Principal;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Security.Cryptography;
 
 namespace StandIn
 {
@@ -3324,6 +3325,709 @@ namespace StandIn
             }
         }
 
+        public static void GetADCSTemplates(String sFilter = "", String sDomain = "", String sUser = "", String sPass = "")
+        {
+            try
+            {
+                DirectoryEntry rootdse = null;
+                DirectoryEntry defNC = null;
+                String sUserDomain = String.Empty;
+                if (!String.IsNullOrEmpty(sDomain) && !String.IsNullOrEmpty(sUser) && !String.IsNullOrEmpty(sPass))
+                {
+                    sUserDomain = String.Format("{0}\\{1}", sDomain, sUser);
+                    rootdse = new DirectoryEntry("LDAP://RootDSE", sUserDomain, sPass);
+                }
+                else
+                {
+                    rootdse = new DirectoryEntry("LDAP://RootDSE");
+                }
+
+                // Build path
+                String sNamingContext = rootdse.Properties["configurationNamingContext"].Value.ToString();
+
+                String sSearchBase = String.Empty;
+                sSearchBase += "CN=Enrollment Services,CN=Public Key Services,CN=Services," + sNamingContext;
+                
+                Console.WriteLine("\n[+] Search Base  : LDAP://" + sSearchBase);
+                
+                if (!String.IsNullOrEmpty(sDomain) && !String.IsNullOrEmpty(sUser) && !String.IsNullOrEmpty(sPass))
+                {
+                    defNC = new DirectoryEntry("LDAP://" + sSearchBase, sUserDomain, sPass);
+                }
+                else
+                {
+                    defNC = new DirectoryEntry("LDAP://" + sSearchBase);
+                }
+                
+                // Search
+                DirectorySearcher ds = new DirectorySearcher(defNC);
+                ds.Filter = "(objectCategory=pKIEnrollmentService)";
+                SearchResultCollection src = ds.FindAll();
+                
+                foreach (SearchResult sr in src)
+                {
+                    String sCA = sr.Properties["name"][0].ToString();
+                    Console.WriteLine("\n[>] Certificate Authority  : " + sCA);
+                    Console.WriteLine("    |_ DNS Hostname        : " + sr.Properties["dNSHostName"][0].ToString());
+                    Console.WriteLine("    |_ Cert DN             : " + sr.Properties["cACertificateDN"][0].ToString());
+                    Console.WriteLine("    |_ GUID                : " + new Guid((Byte[])sr.Properties["objectGUID"][0]).ToString());
+                    if (sr.Properties.Contains("certificateTemplates"))
+                    {
+                        var aTemplates = sr.Properties["certificateTemplates"];
+                        List<String> lTemplates = new List<string>();
+                        if (aTemplates.Count > 0)
+                        {
+                            // Print published templates
+                            for (int i = 0; i < aTemplates.Count; i++)
+                            {
+                                if (i == 0)
+                                {
+                                    Console.WriteLine("    |_ Published Templates : " + aTemplates[i].ToString());
+                                }
+                                else
+                                {
+                                    Console.WriteLine("                             " + aTemplates[i].ToString());
+                                }
+
+                                lTemplates.Add(aTemplates[i].ToString());
+                            }
+
+                            // Search for all published templates by this CA
+                            sSearchBase = "CN=Certificate Templates,CN=Public Key Services,CN=Services," + sNamingContext;
+                            if (!String.IsNullOrEmpty(sDomain) && !String.IsNullOrEmpty(sUser) && !String.IsNullOrEmpty(sPass))
+                            {
+                                defNC = new DirectoryEntry("LDAP://" + sSearchBase, sUserDomain, sPass);
+                            }
+                            else
+                            {
+                                defNC = new DirectoryEntry("LDAP://" + sSearchBase);
+                            }
+
+                            ds = new DirectorySearcher(defNC);
+                            if (String.IsNullOrEmpty(sFilter))
+                            {
+                                ds.Filter = "(objectclass=pKICertificateTemplate)";
+                            } else
+                            {
+                                ds.Filter = String.Format("(&(objectclass=pKICertificateTemplate)(|(name=*{0}*)(name={0}*)(name=*{0})))", sFilter);
+                            }
+                            
+                            src = ds.FindAll();
+
+                            foreach (SearchResult srt in src)
+                            {
+                                // Is this a template that belongs to the CA?
+                                String sName = srt.Properties["name"][0].ToString();
+                                if (lTemplates.Contains(srt.Properties["name"][0].ToString()))
+                                {
+                                    Console.WriteLine("\n[>] Publishing CA          : " + sCA);
+                                    Console.WriteLine("    |_ Template            : " + srt.Properties["name"][0].ToString());
+                                    if (srt.Properties.Contains("mspki-template-schema-version"))
+                                    {
+                                        Console.WriteLine("    |_ Schema Version      : " + srt.Properties["mspki-template-schema-version"][0].ToString());
+                                    }
+                                    if (srt.Properties.Contains("pKIExpirationPeriod"))
+                                    {
+                                        Console.WriteLine("    |_ pKIExpirationPeriod : " + hStandIn.ConvertPKIPeriod((byte[])srt.Properties["pKIExpirationPeriod"][0]));
+                                    }
+                                    if (srt.Properties.Contains("pKIOverlapPeriod"))
+                                    {
+                                        Console.WriteLine("    |_ pKIOverlapPeriod    : " + hStandIn.ConvertPKIPeriod((byte[])srt.Properties["pKIOverlapPeriod"][0]));
+                                    }
+                                    if (srt.Properties.Contains("mspki-enrollment-flag"))
+                                    {
+                                        Console.WriteLine("    |_ Enroll Flags        : " + (hStandIn.msPKIEnrollmentFlag)Convert.ToInt32(srt.Properties["mspki-enrollment-flag"][0].ToString()));
+                                    }
+                                    if (srt.Properties.Contains("mspki-certificate-name-flag"))
+                                    {
+                                        Console.WriteLine("    |_ Name Flags          : " + (hStandIn.msPKICertificateNameFlag)Convert.ToInt32(srt.Properties["mspki-certificate-name-flag"][0].ToString()));
+                                    }
+                                    if (srt.Properties.Contains("pKIExtendedKeyUsage"))
+                                    {
+                                        var EKUs = srt.Properties["pKIExtendedKeyUsage"];
+                                        if (EKUs.Count > 0)
+                                        {
+                                            for (int e = 0; e < EKUs.Count; e++)
+                                            {
+                                                if (e == 0)
+                                                {
+                                                    Console.WriteLine("    |_ pKIExtendedKeyUsage : " + (new Oid(srt.Properties["pKIExtendedKeyUsage"][e].ToString())).FriendlyName);
+                                                } else
+                                                {
+                                                    Console.WriteLine("    |                        " + (new Oid(srt.Properties["pKIExtendedKeyUsage"][e].ToString())).FriendlyName);
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Get Object permissions
+                                    DirectoryEntry mde = srt.GetDirectoryEntry();
+                                    Console.WriteLine("    |_ Owner               : " + mde.ObjectSecurity.GetOwner(typeof(NTAccount)).ToString());
+                                    AuthorizationRuleCollection arc = mde.ObjectSecurity.GetAccessRules(true, true, typeof(NTAccount));
+                                    foreach (ActiveDirectoryAccessRule ar in arc)
+                                    {
+                                        Console.WriteLine("    |_ Permission Identity : " + ar.IdentityReference.Value);
+                                        Console.WriteLine("    |  |_ Type             : " + ar.AccessControlType.ToString());
+                                        Console.WriteLine("    |  |_ Permission       : " + ar.ActiveDirectoryRights.ToString());
+                                        if (ar.ObjectType.ToString() == "00000000-0000-0000-0000-000000000000")
+                                        {
+                                            Console.WriteLine("    |  |_ Object           : ANY");
+                                        }
+                                        else
+                                        {
+                                            String sSchemaFriendlyName = hStandIn.schemaGUIDToFriendlyName(ar.ObjectType, sDomain, sUser, sPass);
+                                            if (String.IsNullOrEmpty(sSchemaFriendlyName))
+                                            {
+                                                String sRightsFriendlyName = hStandIn.rightsGUIDToFriendlyName(ar.ObjectType, sDomain, sUser, sPass);
+                                                if (String.IsNullOrEmpty(sRightsFriendlyName))
+                                                {
+                                                    Console.WriteLine("    |  |_ Object           : " + ar.ObjectType.ToString());
+                                                }
+                                                else
+                                                {
+                                                    Console.WriteLine("    |  |_ Object           : " + sRightsFriendlyName);
+                                                }
+                                            }
+                                            else
+                                            {
+                                                Console.WriteLine("    |  |_ Object           : " + sSchemaFriendlyName);
+                                            }
+                                        }
+                                    }
+
+                                    if (srt.Properties.Contains("whenCreated"))
+                                    {
+                                        Console.WriteLine("    |_ Created             : " + srt.Properties["whenCreated"][0].ToString());
+                                    }
+                                    if (srt.Properties.Contains("whenChanged"))
+                                    {
+                                        Console.WriteLine("    |_ Modified            : " + srt.Properties["whenChanged"][0].ToString());
+                                    }
+                                }
+                            }
+
+                        } else
+                        {
+                            Console.WriteLine("    |_ Published Templates : None");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[!] Failed to enumerate ADCS data..");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine("    |_ " + ex.InnerException.Message);
+                }
+                else
+                {
+                    Console.WriteLine("    |_ " + ex.Message);
+                }
+            }
+        }
+
+        public static void ModifyADCSTemplate(String sFilter, Boolean bEKU, Boolean bNameFalg, Boolean bEnrollFlag, Boolean bRemove, String sDomain = "", String sUser = "", String sPass = "")
+        {
+            try
+            {
+                DirectoryEntry rootdse = null;
+                DirectoryEntry defNC = null;
+                String sUserDomain = String.Empty;
+                if (!String.IsNullOrEmpty(sDomain) && !String.IsNullOrEmpty(sUser) && !String.IsNullOrEmpty(sPass))
+                {
+                    sUserDomain = String.Format("{0}\\{1}", sDomain, sUser);
+                    rootdse = new DirectoryEntry("LDAP://RootDSE", sUserDomain, sPass);
+                }
+                else
+                {
+                    rootdse = new DirectoryEntry("LDAP://RootDSE");
+                }
+
+                // Build path
+                String sNamingContext = rootdse.Properties["configurationNamingContext"].Value.ToString();
+
+                String sSearchBase = String.Empty;
+                sSearchBase += "CN=Enrollment Services,CN=Public Key Services,CN=Services," + sNamingContext;
+
+                Console.WriteLine("\n[+] Search Base  : LDAP://" + sSearchBase);
+
+                if (!String.IsNullOrEmpty(sDomain) && !String.IsNullOrEmpty(sUser) && !String.IsNullOrEmpty(sPass))
+                {
+                    defNC = new DirectoryEntry("LDAP://" + sSearchBase, sUserDomain, sPass);
+                }
+                else
+                {
+                    defNC = new DirectoryEntry("LDAP://" + sSearchBase);
+                }
+
+                // Search
+                DirectorySearcher ds = new DirectorySearcher(defNC);
+                ds.Filter = "(objectCategory=pKIEnrollmentService)";
+                SearchResultCollection src = ds.FindAll();
+
+                foreach (SearchResult sr in src)
+                {
+                    String sCA = sr.Properties["name"][0].ToString();
+                    if (sr.Properties.Contains("certificateTemplates"))
+                    {
+                        var aTemplates = sr.Properties["certificateTemplates"];
+                        List<String> lTemplates = new List<string>();
+                        if (aTemplates.Count > 0)
+                        {
+                            // Print published templates
+                            for (int i = 0; i < aTemplates.Count; i++)
+                            {
+                                lTemplates.Add(aTemplates[i].ToString());
+                            }
+
+                            // Search for all published templates by this CA
+                            sSearchBase = "CN=Certificate Templates,CN=Public Key Services,CN=Services," + sNamingContext;
+                            if (!String.IsNullOrEmpty(sDomain) && !String.IsNullOrEmpty(sUser) && !String.IsNullOrEmpty(sPass))
+                            {
+                                defNC = new DirectoryEntry("LDAP://" + sSearchBase, sUserDomain, sPass);
+                            }
+                            else
+                            {
+                                defNC = new DirectoryEntry("LDAP://" + sSearchBase);
+                            }
+
+                            ds = new DirectorySearcher(defNC);
+                            ds.Filter = String.Format("(&(objectclass=pKICertificateTemplate)(name={0}))", sFilter);
+
+                            src = ds.FindAll();
+
+                            // We only want to see 1 result here
+                            if (src.Count == 0)
+                            {
+                                Console.WriteLine("\n[>] CA " + sCA + " does not publish this template..");
+                                continue;
+                            } else if (src.Count > 1)
+                            {
+                                Console.WriteLine("[!] More than one ADCS template found..");
+                                return;
+                            }
+
+                            foreach (SearchResult srt in src)
+                            {
+                                // Is this a template that belongs to the CA?
+                                String sName = srt.Properties["name"][0].ToString();
+                                if (lTemplates.Contains(srt.Properties["name"][0].ToString()))
+                                {
+                                    Console.WriteLine("\n[>] Publishing CA          : " + sCA);
+                                    Console.WriteLine("    |_ Template            : " + srt.Properties["name"][0].ToString());
+                                    if (srt.Properties.Contains("mspki-enrollment-flag"))
+                                    {
+                                        Console.WriteLine("    |_ Enroll Flags        : " + (hStandIn.msPKIEnrollmentFlag)Convert.ToInt32(srt.Properties["mspki-enrollment-flag"][0].ToString()));
+                                    }
+                                    if (srt.Properties.Contains("mspki-certificate-name-flag"))
+                                    {
+                                        Console.WriteLine("    |_ Name Flags          : " + (hStandIn.msPKICertificateNameFlag)Convert.ToInt32(srt.Properties["mspki-certificate-name-flag"][0].ToString()));
+                                    }
+                                    if (srt.Properties.Contains("pKIExtendedKeyUsage"))
+                                    {
+                                        var EKUs = srt.Properties["pKIExtendedKeyUsage"];
+                                        if (EKUs.Count > 0)
+                                        {
+                                            for (int e = 0; e < EKUs.Count; e++)
+                                            {
+                                                if (e == 0)
+                                                {
+                                                    Console.WriteLine("    |_ pKIExtendedKeyUsage : " + (new Oid(srt.Properties["pKIExtendedKeyUsage"][e].ToString())).FriendlyName);
+                                                }
+                                                else
+                                                {
+                                                    Console.WriteLine("    |                        " + (new Oid(srt.Properties["pKIExtendedKeyUsage"][e].ToString())).FriendlyName);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (srt.Properties.Contains("whenCreated"))
+                                    {
+                                        Console.WriteLine("    |_ Created             : " + srt.Properties["whenCreated"][0].ToString());
+                                    }
+                                    if (srt.Properties.Contains("whenChanged"))
+                                    {
+                                        Console.WriteLine("    |_ Modified            : " + srt.Properties["whenChanged"][0].ToString());
+                                    }
+                                }
+
+                                DirectoryEntry mde = srt.GetDirectoryEntry();
+                                ResultPropertyCollection omProps = srt.Properties;
+
+                                if (bEKU)
+                                {
+                                    // Update EKU
+                                    List<String> lEKU = new List<String>();
+                                    try
+                                    {
+                                        foreach (var element in omProps["pKIExtendedKeyUsage"])
+                                        {
+                                            lEKU.Add(element.ToString());
+                                        }
+                                    }
+                                    catch
+                                    {
+                                        Console.WriteLine("[!] Failed to get pKIExtendedKeyUsage property..");
+                                        return;
+                                    }
+
+                                    if (!bRemove)
+                                    {
+                                        if (lEKU.Contains("1.3.6.1.5.5.7.3.2"))
+                                        {
+                                            Console.WriteLine("\n[!] pKIExtendedKeyUsage already allows client authentication..");
+                                            return;
+                                        }
+
+                                        Console.WriteLine("\n[+] Adding pKIExtendedKeyUsage : Client Authentication");
+                                        lEKU.Add("1.3.6.1.5.5.7.3.2");
+                                        mde.Properties["pKIExtendedKeyUsage"].Value = (Array)lEKU.ToArray();
+                                    }
+                                    else
+                                    {
+                                        if (lEKU.Count == 0)
+                                        {
+                                            Console.WriteLine("\n[!] pKIExtendedKeyUsage property does not exist..");
+                                            return;
+                                        }
+
+                                        if (!lEKU.Contains("1.3.6.1.5.5.7.3.2"))
+                                        {
+                                            Console.WriteLine("\n[!] pKIExtendedKeyUsage already disallows client authentication..");
+                                            return;
+                                        }
+
+                                        Console.WriteLine("\n[+] Removing pKIExtendedKeyUsage : Client Authentication");
+
+                                        lEKU.Remove("1.3.6.1.5.5.7.3.2");
+                                        mde.Properties["pKIExtendedKeyUsage"].Value = (Array)lEKU.ToArray();
+
+                                    }
+                                } else if (bNameFalg)
+                                {
+                                    // Update Name Flag
+                                    hStandIn.msPKICertificateNameFlag oNameFlags;
+                                    try
+                                    {
+                                        oNameFlags = (hStandIn.msPKICertificateNameFlag)Convert.ToInt32(srt.Properties["mspki-certificate-name-flag"][0].ToString());
+                                    }
+                                    catch
+                                    {
+                                        Console.WriteLine("[!] Failed to get msPKI-Certificate-Name-Flag property..");
+                                        return;
+                                    }
+
+                                    // Does it already have ENROLLEE_SUPPLIES_SUBJECT?
+                                    Boolean hasESS = (Boolean)((oNameFlags & hStandIn.msPKICertificateNameFlag.ENROLLEE_SUPPLIES_SUBJECT) != 0);
+
+                                    if (!bRemove)
+                                    {
+                                        if (hasESS)
+                                        {
+                                            Console.WriteLine("\n[!] msPKI-Certificate-Name-Flag already has ENROLLEE_SUPPLIES_SUBJECT..");
+                                            return;
+                                        }
+                                    
+                                        Console.WriteLine("\n[+] Adding msPKI-Certificate-Name-Flag : ENROLLEE_SUPPLIES_SUBJECT");
+                                        mde.Properties["mspki-certificate-name-flag"].Value = (Int32)(oNameFlags | hStandIn.msPKICertificateNameFlag.ENROLLEE_SUPPLIES_SUBJECT);
+                                    }
+                                    else
+                                    {
+                                        if (!hasESS)
+                                        {
+                                            Console.WriteLine("\n[!] msPKI-Certificate-Name-Flag doesn't have ENROLLEE_SUPPLIES_SUBJECT..");
+                                            return;
+                                        }
+
+                                        Console.WriteLine("\n[+] Removing msPKI-Certificate-Name-Flag : ENROLLEE_SUPPLIES_SUBJECT");
+                                        mde.Properties["mspki-certificate-name-flag"].Value = (Int32)(oNameFlags & ~hStandIn.msPKICertificateNameFlag.ENROLLEE_SUPPLIES_SUBJECT);
+                                    }
+                                } else if (bEnrollFlag)
+                                {
+                                    // Update Enroll Flag
+                                    hStandIn.msPKIEnrollmentFlag oEnrollFlags;
+                                    try
+                                    {
+                                        oEnrollFlags = (hStandIn.msPKIEnrollmentFlag)Convert.ToInt32(srt.Properties["mspki-enrollment-flag"][0].ToString());
+                                    }
+                                    catch
+                                    {
+                                        Console.WriteLine("[!] Failed to get msPKI-Enrollment-Flag property..");
+                                        return;
+                                    }
+
+                                    // Does it already have PEND_ALL_REQUESTS?
+                                    Boolean hasPend = (Boolean)((oEnrollFlags & hStandIn.msPKIEnrollmentFlag.PEND_ALL_REQUESTS) != 0);
+
+                                    if (!bRemove)
+                                    {
+                                        if (hasPend)
+                                        {
+                                            Console.WriteLine("\n[!] msPKI-Enrollment-Flag already has PEND_ALL_REQUESTS..");
+                                            return;
+                                        }
+
+                                        Console.WriteLine("\n[+] Adding msPKI-Enrollment-Flag : PEND_ALL_REQUESTS");
+                                        mde.Properties["mspki-enrollment-flag"].Value = (Int32)(oEnrollFlags | hStandIn.msPKIEnrollmentFlag.PEND_ALL_REQUESTS);
+                                    }
+                                    else
+                                    {
+                                        if (!hasPend)
+                                        {
+                                            Console.WriteLine("\n[!] msPKI-Enrollment-Flag doesn't have PEND_ALL_REQUESTS..");
+                                            return;
+                                        }
+
+                                        Console.WriteLine("\n[+] Removing msPKI-Enrollment-Flag : PEND_ALL_REQUESTS");
+                                        mde.Properties["mspki-enrollment-flag"].Value = (Int32)(oEnrollFlags & ~hStandIn.msPKIEnrollmentFlag.PEND_ALL_REQUESTS);
+                                    }
+                                }
+
+                                mde.CommitChanges();
+                                Console.WriteLine("    |_ Success");
+                            }
+
+                        }
+                        else
+                        {
+                            Console.WriteLine("\n[>] CA " + sCA + " does not publish any templates..");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[!] Failed to modify ADCS template..");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine("    |_ " + ex.InnerException.Message);
+                }
+                else
+                {
+                    Console.WriteLine("    |_ " + ex.Message);
+                }
+            }
+        }
+
+        public static void ModifyADCSPermissions(String sFilter, String sGrant, Boolean bOwner, Boolean bEnroll, Boolean bWrite, Boolean bRemove, String sDomain = "", String sUser = "", String sPass = "")
+        {
+            try
+            {
+                DirectoryEntry rootdse = null;
+                DirectoryEntry defNC = null;
+                String sUserDomain = String.Empty;
+                if (!String.IsNullOrEmpty(sDomain) && !String.IsNullOrEmpty(sUser) && !String.IsNullOrEmpty(sPass))
+                {
+                    sUserDomain = String.Format("{0}\\{1}", sDomain, sUser);
+                    rootdse = new DirectoryEntry("LDAP://RootDSE", sUserDomain, sPass);
+                }
+                else
+                {
+                    rootdse = new DirectoryEntry("LDAP://RootDSE");
+                }
+
+                // Build path
+                String sNamingContext = rootdse.Properties["configurationNamingContext"].Value.ToString();
+
+                String sSearchBase = String.Empty;
+                sSearchBase += "CN=Enrollment Services,CN=Public Key Services,CN=Services," + sNamingContext;
+
+                Console.WriteLine("\n[+] Search Base  : LDAP://" + sSearchBase);
+
+                if (!String.IsNullOrEmpty(sDomain) && !String.IsNullOrEmpty(sUser) && !String.IsNullOrEmpty(sPass))
+                {
+                    defNC = new DirectoryEntry("LDAP://" + sSearchBase, sUserDomain, sPass);
+                }
+                else
+                {
+                    defNC = new DirectoryEntry("LDAP://" + sSearchBase);
+                }
+
+                // Search
+                DirectorySearcher ds = new DirectorySearcher(defNC);
+                ds.Filter = "(objectCategory=pKIEnrollmentService)";
+                SearchResultCollection src = ds.FindAll();
+
+                foreach (SearchResult sr in src)
+                {
+                    String sCA = sr.Properties["name"][0].ToString();
+                    if (sr.Properties.Contains("certificateTemplates"))
+                    {
+                        var aTemplates = sr.Properties["certificateTemplates"];
+                        List<String> lTemplates = new List<string>();
+                        if (aTemplates.Count > 0)
+                        {
+                            // Print published templates
+                            for (int i = 0; i < aTemplates.Count; i++)
+                            {
+                                lTemplates.Add(aTemplates[i].ToString());
+                            }
+
+                            // Search for all published templates by this CA
+                            sSearchBase = "CN=Certificate Templates,CN=Public Key Services,CN=Services," + sNamingContext;
+                            if (!String.IsNullOrEmpty(sDomain) && !String.IsNullOrEmpty(sUser) && !String.IsNullOrEmpty(sPass))
+                            {
+                                defNC = new DirectoryEntry("LDAP://" + sSearchBase, sUserDomain, sPass);
+                            }
+                            else
+                            {
+                                defNC = new DirectoryEntry("LDAP://" + sSearchBase);
+                            }
+
+                            ds = new DirectorySearcher(defNC);
+                            ds.Filter = String.Format("(&(objectclass=pKICertificateTemplate)(name={0}))", sFilter);
+
+                            src = ds.FindAll();
+
+                            // We only want to see 1 result here
+                            if (src.Count == 0)
+                            {
+                                Console.WriteLine("\n[>] CA " + sCA + " does not publish this template..");
+                                continue;
+                            }
+                            else if (src.Count > 1)
+                            {
+                                Console.WriteLine("[!] More than one ADCS template found..");
+                                return;
+                            }
+
+                            foreach (SearchResult srt in src)
+                            {
+                                // Is this a template that belongs to the CA?
+                                String sName = srt.Properties["name"][0].ToString();
+                                if (lTemplates.Contains(srt.Properties["name"][0].ToString()))
+                                {
+                                    Console.WriteLine("\n[>] Publishing CA          : " + sCA);
+                                    Console.WriteLine("    |_ Template            : " + srt.Properties["name"][0].ToString());
+                                    if (srt.Properties.Contains("mspki-enrollment-flag"))
+                                    {
+                                        Console.WriteLine("    |_ Enroll Flags        : " + (hStandIn.msPKIEnrollmentFlag)Convert.ToInt32(srt.Properties["mspki-enrollment-flag"][0].ToString()));
+                                    }
+                                    if (srt.Properties.Contains("mspki-certificate-name-flag"))
+                                    {
+                                        Console.WriteLine("    |_ Name Flags          : " + (hStandIn.msPKICertificateNameFlag)Convert.ToInt32(srt.Properties["mspki-certificate-name-flag"][0].ToString()));
+                                    }
+                                    if (srt.Properties.Contains("pKIExtendedKeyUsage"))
+                                    {
+                                        var EKUs = srt.Properties["pKIExtendedKeyUsage"];
+                                        if (EKUs.Count > 0)
+                                        {
+                                            for (int e = 0; e < EKUs.Count; e++)
+                                            {
+                                                if (e == 0)
+                                                {
+                                                    Console.WriteLine("    |_ pKIExtendedKeyUsage : " + (new Oid(srt.Properties["pKIExtendedKeyUsage"][e].ToString())).FriendlyName);
+                                                }
+                                                else
+                                                {
+                                                    Console.WriteLine("    |                        " + (new Oid(srt.Properties["pKIExtendedKeyUsage"][e].ToString())).FriendlyName);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (srt.Properties.Contains("whenCreated"))
+                                    {
+                                        Console.WriteLine("    |_ Created             : " + srt.Properties["whenCreated"][0].ToString());
+                                    }
+                                    if (srt.Properties.Contains("whenChanged"))
+                                    {
+                                        Console.WriteLine("    |_ Modified            : " + srt.Properties["whenChanged"][0].ToString());
+                                    }
+                                }
+
+                                DirectoryEntry mde = srt.GetDirectoryEntry();
+                                ResultPropertyCollection omProps = srt.Properties;
+
+                                Console.WriteLine("\n[+] Set object access rules");
+                                IdentityReference ir = new NTAccount(sGrant);
+
+                                if (bOwner)
+                                {
+                                    // Change template owner
+                                    Console.WriteLine("\n[+] Changing template owner : " + ir.ToString());
+                                    mde.ObjectSecurity.SetOwner(ir);
+                                }
+                                else if (bEnroll)
+                                {
+                                    // Add Certificate-Enrollment permission for user
+                                    if (bRemove)
+                                    {
+                                        Console.WriteLine("\n[+] Removing Certificate-Enrollment permission : " + ir.ToString());
+                                        Guid rightGuid = new Guid("0e10c968-78fb-11d2-90d4-00c04f79dc55");
+                                        ActiveDirectoryAccessRule ar = new ActiveDirectoryAccessRule(ir, ActiveDirectoryRights.ExtendedRight, AccessControlType.Allow, rightGuid, ActiveDirectorySecurityInheritance.None);
+                                        mde.Options.SecurityMasks = System.DirectoryServices.SecurityMasks.Dacl;
+                                        mde.ObjectSecurity.RemoveAccessRule(ar);
+                                    } else
+                                    {
+                                        Console.WriteLine("\n[+] Adding Certificate-Enrollment permission : " + ir.ToString());
+                                        Guid rightGuid = new Guid("0e10c968-78fb-11d2-90d4-00c04f79dc55");
+                                        ActiveDirectoryAccessRule ar = new ActiveDirectoryAccessRule(ir, ActiveDirectoryRights.ExtendedRight, AccessControlType.Allow, rightGuid, ActiveDirectorySecurityInheritance.None);
+                                        mde.Options.SecurityMasks = System.DirectoryServices.SecurityMasks.Dacl;
+                                        mde.ObjectSecurity.AddAccessRule(ar);
+                                    }
+                                }
+                                else if (bWrite)
+                                {
+                                    // Add WriteDacl/WriteOwner/WriteProperty permission for user
+                                    if (bRemove)
+                                    {
+                                        Console.WriteLine("\n[+] Removing write permissions : " + ir.ToString());
+                                        ActiveDirectoryAccessRule ar = new ActiveDirectoryAccessRule(ir, ActiveDirectoryRights.WriteDacl, AccessControlType.Allow, ActiveDirectorySecurityInheritance.None);
+                                        mde.Options.SecurityMasks = System.DirectoryServices.SecurityMasks.Dacl;
+                                        mde.ObjectSecurity.RemoveAccessRule(ar);
+
+                                        ar = new ActiveDirectoryAccessRule(ir, ActiveDirectoryRights.WriteOwner, AccessControlType.Allow, ActiveDirectorySecurityInheritance.None);
+                                        mde.Options.SecurityMasks = System.DirectoryServices.SecurityMasks.Dacl;
+                                        mde.ObjectSecurity.RemoveAccessRule(ar);
+
+                                        ar = new ActiveDirectoryAccessRule(ir, ActiveDirectoryRights.WriteProperty, AccessControlType.Allow, ActiveDirectorySecurityInheritance.None);
+                                        mde.Options.SecurityMasks = System.DirectoryServices.SecurityMasks.Dacl;
+                                        mde.ObjectSecurity.RemoveAccessRule(ar);
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine("\n[+] Adding write permissions : " + ir.ToString());
+                                        ActiveDirectoryAccessRule ar = new ActiveDirectoryAccessRule(ir, ActiveDirectoryRights.WriteDacl, AccessControlType.Allow, ActiveDirectorySecurityInheritance.None);
+                                        mde.Options.SecurityMasks = System.DirectoryServices.SecurityMasks.Dacl;
+                                        mde.ObjectSecurity.AddAccessRule(ar);
+
+                                        ar = new ActiveDirectoryAccessRule(ir, ActiveDirectoryRights.WriteOwner, AccessControlType.Allow, ActiveDirectorySecurityInheritance.None);
+                                        mde.Options.SecurityMasks = System.DirectoryServices.SecurityMasks.Dacl;
+                                        mde.ObjectSecurity.AddAccessRule(ar);
+
+                                        ar = new ActiveDirectoryAccessRule(ir, ActiveDirectoryRights.WriteProperty, AccessControlType.Allow, ActiveDirectorySecurityInheritance.None);
+                                        mde.Options.SecurityMasks = System.DirectoryServices.SecurityMasks.Dacl;
+                                        mde.ObjectSecurity.AddAccessRule(ar);
+                                    }
+                                }
+
+                                mde.CommitChanges();
+                                Console.WriteLine("    |_ Success");
+                            }
+
+                        }
+                        else
+                        {
+                            Console.WriteLine("\n[>] CA " + sCA + " does not publish any templates..");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[!] Failed to modify ADCS permissions..");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine("    |_ " + ex.InnerException.Message);
+                }
+                else
+                {
+                    Console.WriteLine("    |_ " + ex.Message);
+                }
+            }
+        }
+
         // Args
         class ArgOptions
         {
@@ -3459,6 +4163,27 @@ namespace StandIn
             [Option(null, "forest")]
             public Boolean bForest { get; set; }
 
+            [Option(null, "adcs")]
+            public Boolean bADCS { get; set; }
+
+            [Option(null, "clientauth")]
+            public Boolean bClientAuth { get; set; }
+
+            [Option(null, "ess")]
+            public Boolean bESS { get; set; }
+
+            [Option(null, "pend")]
+            public Boolean bPend { get; set; }
+
+            [Option(null, "owner")]
+            public Boolean bOwner { get; set; }
+
+            [Option(null, "write")]
+            public Boolean bWrite { get; set; }
+
+            [Option(null, "enroll")]
+            public Boolean bEnroll { get; set; }
+
             [Option(null, "limit")]
             public UInt32 iLimit { get; set; }
         }
@@ -3474,7 +4199,7 @@ namespace StandIn
                 }
                 else
                 {
-                    if (!String.IsNullOrEmpty(ArgOptions.sComp) || !String.IsNullOrEmpty(ArgOptions.sObject) || !String.IsNullOrEmpty(ArgOptions.sGroup) || !String.IsNullOrEmpty(ArgOptions.sLdap) || !String.IsNullOrEmpty(ArgOptions.sSid) || !String.IsNullOrEmpty(ArgOptions.sSetSPN) || ArgOptions.bSPN || ArgOptions.bDelegation || ArgOptions.bAsrep || ArgOptions.bDc || ArgOptions.bGPO || ArgOptions.bDNS || ArgOptions.bPolicy || ArgOptions.bPasswdnotreqd)
+                    if (!String.IsNullOrEmpty(ArgOptions.sComp) || !String.IsNullOrEmpty(ArgOptions.sObject) || !String.IsNullOrEmpty(ArgOptions.sGroup) || !String.IsNullOrEmpty(ArgOptions.sLdap) || !String.IsNullOrEmpty(ArgOptions.sSid) || !String.IsNullOrEmpty(ArgOptions.sSetSPN) || ArgOptions.bSPN || ArgOptions.bDelegation || ArgOptions.bAsrep || ArgOptions.bDc || ArgOptions.bGPO || ArgOptions.bDNS || ArgOptions.bPolicy || ArgOptions.bPasswdnotreqd || ArgOptions.bADCS)
                     {
                         if (!String.IsNullOrEmpty(ArgOptions.sComp))
                         {
@@ -3636,6 +4361,111 @@ namespace StandIn
                             } else
                             {
                                 Console.WriteLine("[!] Insufficient arguments provided (--principal/add/remove)..");
+                            }
+                        }
+                        else if (ArgOptions.bADCS)
+                        {
+                            if (ArgOptions.bClientAuth)
+                            {
+                                if (!String.IsNullOrEmpty(ArgOptions.sFilter) && ArgOptions.bAdd || ArgOptions.bRemove)
+                                {
+                                    if (ArgOptions.bAdd)
+                                    {
+                                        ModifyADCSTemplate(ArgOptions.sFilter, true, false, false, false, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                    } else
+                                    {
+                                        ModifyADCSTemplate(ArgOptions.sFilter, true, false, false, true, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                    }
+                                } else
+                                {
+                                    Console.WriteLine("[!] Insufficient arguments provided (--filter/--add/--remove)..");
+                                }
+                            } else if (ArgOptions.bESS)
+                            {
+                                if (!String.IsNullOrEmpty(ArgOptions.sFilter) && ArgOptions.bAdd || ArgOptions.bRemove)
+                                {
+                                    if (ArgOptions.bAdd)
+                                    {
+                                        ModifyADCSTemplate(ArgOptions.sFilter, false, true, false, false, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                    }
+                                    else
+                                    {
+                                        ModifyADCSTemplate(ArgOptions.sFilter, false, true, false, true, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                    }
+                                }
+                                else
+                                {
+                                    Console.WriteLine("[!] Insufficient arguments provided (--filter/--add/--remove)..");
+                                }
+                            } else if (ArgOptions.bPend)
+                            {
+                                if (!String.IsNullOrEmpty(ArgOptions.sFilter) && ArgOptions.bAdd || ArgOptions.bRemove)
+                                {
+                                    if (ArgOptions.bAdd)
+                                    {
+                                        ModifyADCSTemplate(ArgOptions.sFilter, false, false, true, false, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                    }
+                                    else
+                                    {
+                                        ModifyADCSTemplate(ArgOptions.sFilter, false, false, true, true, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                    }
+                                }
+                                else
+                                {
+                                    Console.WriteLine("[!] Insufficient arguments provided (--filter/--add/--remove)..");
+                                }
+                            } else if (!String.IsNullOrEmpty(ArgOptions.sNtaccount))
+                            {
+                                if (ArgOptions.bOwner)
+                                {
+                                    if (!String.IsNullOrEmpty(ArgOptions.sFilter))
+                                    {
+                                        ModifyADCSPermissions(ArgOptions.sFilter, ArgOptions.sNtaccount, true, false, false, false, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine("[!] Insufficient arguments provided (--filter)..");
+                                    }
+                                }
+                                else if (ArgOptions.bEnroll)
+                                {
+                                    if (!String.IsNullOrEmpty(ArgOptions.sFilter) && ArgOptions.bAdd || ArgOptions.bRemove)
+                                    {
+                                        if (ArgOptions.bAdd)
+                                        {
+                                            ModifyADCSPermissions(ArgOptions.sFilter, ArgOptions.sNtaccount, false, true, false, false, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                        }
+                                        else
+                                        {
+                                            ModifyADCSPermissions(ArgOptions.sFilter, ArgOptions.sNtaccount, false, true, false, true, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine("[!] Insufficient arguments provided (--filter/--add/--remove)..");
+                                    }
+                                }
+                                else if (ArgOptions.bWrite)
+                                {
+                                    if (!String.IsNullOrEmpty(ArgOptions.sFilter) && ArgOptions.bAdd || ArgOptions.bRemove)
+                                    {
+                                        if (ArgOptions.bAdd)
+                                        {
+                                            ModifyADCSPermissions(ArgOptions.sFilter, ArgOptions.sNtaccount, false, false, true, false, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                        }
+                                        else
+                                        {
+                                            ModifyADCSPermissions(ArgOptions.sFilter, ArgOptions.sNtaccount, false, false, true, true, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine("[!] Insufficient arguments provided (--filter/--add/--remove)..");
+                                    }
+                                }
+                            } else
+                            {
+                                GetADCSTemplates(ArgOptions.sFilter, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
                             }
                         }
                     }
