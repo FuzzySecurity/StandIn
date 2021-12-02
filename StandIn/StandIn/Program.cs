@@ -3040,34 +3040,34 @@ namespace StandIn
         }
 
          public static void GetADTrustRelationships()
-        {
-            try
-            {
-                Domain oDom = Domain.GetComputerDomain();
-                String sPDC = oDom.PdcRoleOwner.Name;
-                String sDomName = oDom.Name;
-                Console.WriteLine("\n[?] Using DC    : " + sPDC);
-                Console.WriteLine("    |_ Domain   : " + sDomName);
-
-                TrustRelationshipInformationCollection  trustsCollection = oDom.GetAllTrustRelationships();
-
-                if (trustsCollection.Count < 1){
-                    Console.WriteLine("[!] There is no trust to display..");
-                } else {
-                    foreach (TrustRelationshipInformation trust in trustsCollection)
-                    {
-                        Console.WriteLine("\n[>] Source                    : " + trust.SourceName);
-                        Console.WriteLine("    Target                    : " + trust.TargetName);
-                        Console.WriteLine("    TrustDirection            : " + trust.TrustDirection);
-                        Console.WriteLine("    TrustType                 : " + trust.TrustType);
-                    }
-                }
-            }
-            catch
-            {
-                Console.WriteLine("[!] Failed to contact the current domain..");
-            }
-        }
+         {
+             try
+             {
+                 Domain oDom = Domain.GetComputerDomain();
+                 String sPDC = oDom.PdcRoleOwner.Name;
+                 String sDomName = oDom.Name;
+                 Console.WriteLine("\n[?] Using DC    : " + sPDC);
+                 Console.WriteLine("    |_ Domain   : " + sDomName);
+         
+                 TrustRelationshipInformationCollection  trustsCollection = oDom.GetAllTrustRelationships();
+         
+                 if (trustsCollection.Count < 1){
+                     Console.WriteLine("\n[!] No trust relationships to display..");
+                 } else {
+                     foreach (TrustRelationshipInformation trust in trustsCollection)
+                     {
+                         Console.WriteLine("\n[>] Source         : " + trust.SourceName);
+                         Console.WriteLine("    Target         : " + trust.TargetName);
+                         Console.WriteLine("    TrustDirection : " + trust.TrustDirection);
+                         Console.WriteLine("    TrustType      : " + trust.TrustType);
+                     }
+                 }
+             }
+             catch
+             {
+                 Console.WriteLine("[!] Failed to contact the current domain..");
+             }
+         }
 
         public static void StringToUserOrSID(String sUserId, String sDomain = "", String sUser = "", String sPass = "")
         {

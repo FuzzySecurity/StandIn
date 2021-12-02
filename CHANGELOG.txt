@@ -30,3 +30,8 @@
 - Added function to change ADCS template Owner
 - Added function to add/remove Write permissions on ADCS template
 - Added function to add/remove Certificate Enrollment permissions on ADCS template
+
+-=v1.4=-
+- Added function to display domain trust relationships
+- Bugfix for DNS_RPC_RECORD_AAAA ADIDNS records
+- Added support for DNS_RPC_RECORD_TS ADIDNS records

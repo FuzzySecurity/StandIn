@@ -23,7 +23,6 @@ The following items are currently on the radar for implementation in subsequent 
 - Adding optional JSON/XML output for some functions to help with scripting.
 - Code needs a re-factor, better modularized functions and split out into different classes.
 
-# Subject References
 
 - An ACE up the sleeve (by [@_wald0](https://twitter.com/_wald0) & [@harmj0y](https://twitter.com/harmj0y)) - [here](https://www.blackhat.com/docs/us-17/wednesday/us-17-Robbins-An-ACE-Up-The-Sleeve-Designing-Active-Directory-DACL-Backdoors-wp.pdf)
 - Kerberoasting (by [@_xpn_](https://twitter.com/_xpn_)) - [here](https://blog.xpnsec.com/kerberos-attacks-part-1/)
@@ -56,6 +55,7 @@ The following items are currently on the radar for implementation in subsequent 
     - [Set SPN](#set-spn)
 - [Unconstrained / constrained / resource-based constrained delegation](#unconstrained--constrained--resource-based-constrained-delegation)
 - [DC's](#dcs)
+- [Trust](#trust)
 - [GPO Operations](#gpo-operations)
     - [List GPO's](#list-gpos)
     - [GPO add local admin](#gpo-add-local-admin)
@@ -1030,6 +1030,28 @@ C:\> StandIn.exe --dc
     IP                    : 10.42.54.13
     OSVersion             : Windows Server 2019 Datacenter
     Local System Time UTC : Tuesday, 03 November 2020 03:29:17
+```
+
+## Trust
+
+#### Use Case
+
+> *This function provides situational awareness by finding all domain trusts.*
+
+#### Syntax
+
+Get all trust relationships for the current domain.
+
+```
+C:\> StandIn.exe --trust
+
+[?] Using DC    : m-w16-dc01.main.redhook.local
+    |_ Domain   : main.redhook.local
+
+[>] Source         : main.redhook.local
+    Target         : redhook.local
+    TrustDirection : Bidirectional
+    TrustType      : ParentChild
 ```
 
 ## GPO Operations
