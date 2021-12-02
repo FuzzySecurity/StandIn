@@ -3039,6 +3039,36 @@ namespace StandIn
             }
         }
 
+         public static void GetADTrustRelationships()
+        {
+            try
+            {
+                Domain oDom = Domain.GetComputerDomain();
+                String sPDC = oDom.PdcRoleOwner.Name;
+                String sDomName = oDom.Name;
+                Console.WriteLine("\n[?] Using DC    : " + sPDC);
+                Console.WriteLine("    |_ Domain   : " + sDomName);
+
+                TrustRelationshipInformationCollection  trustsCollection = oDom.GetAllTrustRelationships();
+
+                if (trustsCollection.Count < 1){
+                    Console.WriteLine("[!] There is no trust to display..");
+                } else {
+                    foreach (TrustRelationshipInformation trust in trustsCollection)
+                    {
+                        Console.WriteLine("\n[>] Source                    : " + trust.SourceName);
+                        Console.WriteLine("    Target                    : " + trust.TargetName);
+                        Console.WriteLine("    TrustDirection            : " + trust.TrustDirection);
+                        Console.WriteLine("    TrustType                 : " + trust.TrustType);
+                    }
+                }
+            }
+            catch
+            {
+                Console.WriteLine("[!] Failed to contact the current domain..");
+            }
+        }
+
         public static void StringToUserOrSID(String sUserId, String sDomain = "", String sUser = "", String sPass = "")
         {
             // Create searcher
@@ -4118,6 +4148,9 @@ namespace StandIn
             [Option(null, "dc")]
             public Boolean bDc { get; set; }
 
+            [Option(null, "trust")]
+            public Boolean bTrust { get; set; }
+
             [Option(null, "remove")]
             public Boolean bRemove { get; set; }
 
@@ -4199,7 +4232,8 @@ namespace StandIn
                 }
                 else
                 {
-                    if (!String.IsNullOrEmpty(ArgOptions.sComp) || !String.IsNullOrEmpty(ArgOptions.sObject) || !String.IsNullOrEmpty(ArgOptions.sGroup) || !String.IsNullOrEmpty(ArgOptions.sLdap) || !String.IsNullOrEmpty(ArgOptions.sSid) || !String.IsNullOrEmpty(ArgOptions.sSetSPN) || ArgOptions.bSPN || ArgOptions.bDelegation || ArgOptions.bAsrep || ArgOptions.bDc || ArgOptions.bGPO || ArgOptions.bDNS || ArgOptions.bPolicy || ArgOptions.bPasswdnotreqd || ArgOptions.bADCS)
+
+                    if (!String.IsNullOrEmpty(ArgOptions.sComp) || !String.IsNullOrEmpty(ArgOptions.sObject) || !String.IsNullOrEmpty(ArgOptions.sGroup) || !String.IsNullOrEmpty(ArgOptions.sLdap) || !String.IsNullOrEmpty(ArgOptions.sSid) || !String.IsNullOrEmpty(ArgOptions.sSetSPN) || ArgOptions.bSPN || ArgOptions.bDelegation || ArgOptions.bAsrep || ArgOptions.bDc || ArgOptions.bTrust || ArgOptions.bGPO || ArgOptions.bDNS || ArgOptions.bPolicy || ArgOptions.bPasswdnotreqd || ArgOptions.bADCS)
                     {
                         if (!String.IsNullOrEmpty(ArgOptions.sComp))
                         {
@@ -4313,6 +4347,10 @@ namespace StandIn
                         else if (ArgOptions.bDc)
                         {
                             GetADDomainControllers();
+                        }
+                        else if (ArgOptions.bTrust)
+                        {
+                            GetADTrustRelationships();
                         }
                         else if (!String.IsNullOrEmpty(ArgOptions.sLdap))
                         {
