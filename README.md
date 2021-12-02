@@ -23,6 +23,7 @@ The following items are currently on the radar for implementation in subsequent 
 - Adding optional JSON/XML output for some functions to help with scripting.
 - Code needs a re-factor, better modularized functions and split out into different classes.
 
+# Subject References
 
 - An ACE up the sleeve (by [@_wald0](https://twitter.com/_wald0) & [@harmj0y](https://twitter.com/harmj0y)) - [here](https://www.blackhat.com/docs/us-17/wednesday/us-17-Robbins-An-ACE-Up-The-Sleeve-Designing-Active-Directory-DACL-Backdoors-wp.pdf)
 - Kerberoasting (by [@_xpn_](https://twitter.com/_xpn_)) - [here](https://blog.xpnsec.com/kerberos-attacks-part-1/)
