@@ -89,7 +89,7 @@ The following items are currently on the radar for implementation in subsequent 
 ```
   __
  ( _/_   _//   ~b33f
-__)/(//)(/(/)  v1.3
+__)/(//)(/(/)  v1.4
 
 
  >--~~--> Args? <--~~--<
@@ -133,6 +133,7 @@ __)/(//)(/(/)  v1.3
 --delegation    Boolean, list accounts with unconstrained / constrained delegation
 --asrep         Boolean, list ASREP roastable accounts
 --dc            Boolean, list all domain controllers
+--trust         Boolean, list all trust relationships
 --adcs          List all CA's and all published templates
 --clientauth    Boolean, modify ADCS template to add/remove "Client Authentication"
 --ess           Boolean, modify ADCS template to add/remove "ENROLLEE_SUPPLIES_SUBJECT"
@@ -240,6 +241,9 @@ StandIn.exe --delegation --domain redhook --user RFludd --pass Cl4vi$Alchemi4e
 
 # Get a list of all domain controllers
 StandIn.exe --dc
+
+# Get a list of all trust relationships in the current domain
+StandIn.exe --trust
 
 # List members of group or list user group membership
 StandIn.exe --group Literarum
