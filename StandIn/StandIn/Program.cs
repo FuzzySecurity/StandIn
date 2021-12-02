@@ -3052,11 +3052,11 @@ namespace StandIn
                 TrustRelationshipInformationCollection  trustsCollection = oDom.GetAllTrustRelationships();
 
                 if (trustsCollection.Count < 1){
-                    Console.WriteLine("[*] There is no trust to display..");
+                    Console.WriteLine("[!] There is no trust to display..");
                 } else {
                     foreach (TrustRelationshipInformation trust in trustsCollection)
                     {
-                        Console.WriteLine("\n[*] Source                    : " + trust.SourceName);
+                        Console.WriteLine("\n[>] Source                    : " + trust.SourceName);
                         Console.WriteLine("    Target                    : " + trust.TargetName);
                         Console.WriteLine("    TrustDirection            : " + trust.TrustDirection);
                         Console.WriteLine("    TrustType                 : " + trust.TrustType);
