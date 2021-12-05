@@ -224,6 +224,7 @@ namespace StandIn
                               "--domain        Domain name, e.g. REDHOOK\n" +
 							  "--user          User name\n" +
 							  "--pass          Password\n" +
+                              "--path          LDAP path / container to search in\n" +
                               "--newpass       New password to set for object\n" +
                               "--gpo           List group policy objects\n" +
                               "--acl           Show ACL's for returned GPO's\n" +
@@ -282,7 +283,8 @@ namespace StandIn
                               "# Grant object access permissions\n" +
                               "StandIn.exe --object \"distinguishedname=DC=redhook,DC=local\" --grant \"REDHOOK\\MBWillett\" --type DCSync\n" +
                               "StandIn.exe --object \"distinguishedname=DC=redhook,DC=local\" --grant \"REDHOOK\\MBWillett\" --guid 1131f6aa-9c07-11d1-f79f-00c04fc2dcd2\n" +
-                              "StandIn.exe --object samaccountname=SomeTarget001$ --grant \"REDHOOK\\MBWillett\" --type GenericWrite --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+                              "StandIn.exe --object samaccountname=SomeTarget001$ --grant \"REDHOOK\\MBWillett\" --type GenericWrite --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n" +
+                              "StandIn.exe --object (&(objectClass=pKICertificateTemplate)(cn=User)) --path LDAP://CN=Configuration,DC=redhook,DC=local --access\n\n" +
 
                               "# Set object password\n" +
                               "StandIn.exe --object samaccountname=SomeTarget001$ --newpass \"Arkh4mW1tch!\"\n" +
@@ -443,14 +445,18 @@ namespace StandIn
 			return new string(sPass);
 		}
 
-        public static SearchObject createSearchObject(String sDomain = "", String sUser = "", String sPass = "", Boolean ActOnBehalf = false)
+        public static SearchObject createSearchObject(String sDomain = "", String sUser = "", String sPass = "", String sPath = "", Boolean ActOnBehalf = false)
         {
             DirectoryEntry de = null;
             DirectorySearcher ds = null;
             SearchObject resultObject = new SearchObject();
             try
             {
-                de = new DirectoryEntry();
+                if (sPath == "")
+                    de = new DirectoryEntry();
+                else
+                    de = new DirectoryEntry(sPath);
+
                 resultObject.sDC = de.Options.GetCurrentServerName();
                 Console.WriteLine("\n[?] Using DC : " + de.Options.GetCurrentServerName());
                 if (!String.IsNullOrEmpty(sDomain) && !String.IsNullOrEmpty(sUser) && !String.IsNullOrEmpty(sPass))
