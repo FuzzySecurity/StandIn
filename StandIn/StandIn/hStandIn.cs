@@ -7,20 +7,20 @@ using System.Net;
 
 namespace StandIn
 {
-	class hStandIn
-	{
+    class hStandIn
+    {
         [DllImport("ntdll.dll")]
         public static extern void RtlZeroMemory(
             IntPtr Destination,
             int length);
 
         [StructLayout(LayoutKind.Sequential)]
-		public struct SearchObject
-		{
-			public Boolean success;
-			public String sDC;
-			public DirectorySearcher searcher;
-		}
+        public struct SearchObject
+        {
+            public Boolean success;
+            public String sDC;
+            public DirectorySearcher searcher;
+        }
 
         [StructLayout(LayoutKind.Sequential)]
         public struct GPOVersion
@@ -204,13 +204,13 @@ namespace StandIn
         };
 
         public static void getHelp()
-		{
-			Console.WriteLine(@"  __               ");
-			Console.WriteLine(@" ( _/_   _//   ~b33f");
-			Console.WriteLine(@"__)/(//)(/(/)  v1.4");
+        {
+            Console.WriteLine(@"  __               ");
+            Console.WriteLine(@" ( _/_   _//   ~b33f");
+            Console.WriteLine(@"__)/(//)(/(/)  v1.4");
             Console.WriteLine(@"");
             string HelpText = "\n >--~~--> Args? <--~~--<\n\n" +
-							  "--help          This help menu\n" +
+                              "--help          This help menu\n" +
                               "--object        LDAP filter, e.g. samaccountname=HWest\n" +
                               "--ldap          LDAP filter, can return result collection\n" +
                               "--filter        Filter results, varies based on function\n" +
@@ -222,8 +222,8 @@ namespace StandIn
                               "--grant         User name, e.g. \"REDHOOK\\KMason\"\n" +
                               "--guid          Rights GUID to add to object, e.g. 1131f6aa-9c07-11d1-f79f-00c04fc2dcd2\n" +
                               "--domain        Domain name, e.g. REDHOOK\n" +
-							  "--user          User name\n" +
-							  "--pass          Password\n" +
+                              "--user          User name\n" +
+                              "--pass          Password\n" +
                               "--newpass       New password to set for object\n" +
                               "--gpo           List group policy objects\n" +
                               "--acl           Show ACL's for returned GPO's\n" +
@@ -257,13 +257,14 @@ namespace StandIn
                               "--owner         Boolean, modify ADCS template owner\n" +
                               "--write         Boolean, modify ADCS template, add/remove WriteDacl/WriteOwner/WriteProperty permission for NtAccount\n" +
                               "--enroll        Boolean, modify ADCS template, add/remove \"Certificate-Enrollment\" permission for NtAccount\n" +
+                              "--signature     Boolean, modify ADCS template, removes authorized signature requirement on affected template\n " +
                               "--add           Boolean, context dependent group/spn/adcs\n" +
                               "--remove        Boolean, context dependent msDS-AllowedToActOnBehalfOfOtherIdentity/group/adcs\n" +
-							  "--make          Boolean, make machine; ms-DS-MachineAccountQuota applies\n" +
-							  "--disable       Boolean, disable machine; should be the same user that created the machine\n" +
+                              "--make          Boolean, make machine; ms-DS-MachineAccountQuota applies\n" +
+                              "--disable       Boolean, disable machine; should be the same user that created the machine\n" +
                               "--access        Boolean, list access permissions for object\n" +
                               "--delete        Boolean, delete machine from AD; requires elevated AD access\n\n" +
-							  " >--~~--> Usage? <--~~--<\n\n" +
+                              " >--~~--> Usage? <--~~--<\n\n" +
                               "# Perform LDAP search\n" +
                               "StandIn.exe --ldap \"(&(samAccountType=805306368)(servicePrincipalName=*)(!samAccountName=krbtgt)(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))\"\n" +
                               "StandIn.exe --ldap servicePrincipalName=* --domain redhook --user RFludd --pass Cl4vi$Alchemi4e --limit 10\n" +
@@ -401,27 +402,31 @@ namespace StandIn
                               "StandIn.exe --adcs --filter Kingsport --ntaccount \"REDHOOK\\MBWillett\" --enroll --add\n" +
                               "StandIn.exe --adcs --filter Kingsport --ntaccount \"REDHOOK\\MBWillett\" --enroll --remove --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
 
+                              "# Removes authorized signatures requirement by setting value to 0, filter should contain the exact name of the template\n" +
+                              "StandIn.exe --adcs --filter Kingsport --signature --remove\n" +
+                              "StandIn.exe --adcs --filter Kingsport --signature --remove --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
                               "# Create machine object\n" +
                               "StandIn.exe --computer Innsmouth --make\n" +
                               "StandIn.exe --computer Innsmouth --make --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
 
-							  "# Disable machine object\n" +
+                              "# Disable machine object\n" +
                               "StandIn.exe --computer Arkham --disable\n" +
                               "StandIn.exe --computer Arkham --disable --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
 
-							  "# Delete machine object\n" +
+                              "# Delete machine object\n" +
                               "StandIn.exe --computer Danvers --delete\n" +
                               "StandIn.exe --computer Danvers --delete --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
 
-							  "# Add msDS-AllowedToActOnBehalfOfOtherIdentity to machine object properties\n" +
+                              "# Add msDS-AllowedToActOnBehalfOfOtherIdentity to machine object properties\n" +
                               "StandIn.exe --computer Providence --sid S-1-5-21-1085031214-1563985344-725345543\n" +
                               "StandIn.exe --computer Providence --sid S-1-5-21-1085031214-1563985344-725345543 --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
 
-							  "# Remove msDS-AllowedToActOnBehalfOfOtherIdentity from machine object properties\n" +
+                              "# Remove msDS-AllowedToActOnBehalfOfOtherIdentity from machine object properties\n" +
                               "StandIn.exe --computer Miskatonic --remove\n" +
                               "StandIn.exe --computer Miskatonic --remove --domain redhook --user RFludd --pass Cl4vi$Alchemi4e";
-			Console.WriteLine(HelpText);
-		}
+            Console.WriteLine(HelpText);
+        }
 
         public static void printColor(String sText, ConsoleColor eColor)
         {
@@ -430,18 +435,18 @@ namespace StandIn
             Console.ResetColor();
         }
 
-		public static String genAccountPass()
-		{
-			String sKeyspace = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-			Char[] sPass = new Char[15];
-			Random rand = new Random();
-			for (int i = 0; i < sPass.Length; i++)
-			{
-				sPass[i] = sKeyspace[rand.Next(sKeyspace.Length)];
-			}
+        public static String genAccountPass()
+        {
+            String sKeyspace = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+            Char[] sPass = new Char[15];
+            Random rand = new Random();
+            for (int i = 0; i < sPass.Length; i++)
+            {
+                sPass[i] = sKeyspace[rand.Next(sKeyspace.Length)];
+            }
 
-			return new string(sPass);
-		}
+            return new string(sPass);
+        }
 
         public static SearchObject createSearchObject(String sDomain = "", String sUser = "", String sPass = "", Boolean ActOnBehalf = false)
         {
@@ -559,14 +564,14 @@ namespace StandIn
         }
 
         public static String BuildFilterOctetString(byte[] bytes)
-		{
-			StringBuilder sb = new StringBuilder();
-			for (int i = 0; i < bytes.Length; i++)
-			{
-				sb.AppendFormat("\\{0}", bytes[i].ToString("X2"));
-			}
-			return sb.ToString();
-		}
+        {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < bytes.Length; i++)
+            {
+                sb.AppendFormat("\\{0}", bytes[i].ToString("X2"));
+            }
+            return sb.ToString();
+        }
 
         public static GPOVersion UInt32ToGPOVersion(UInt32 iGPOVersion)
         {
@@ -600,9 +605,11 @@ namespace StandIn
         {
             if (bUser)
             {
-                if (oGPOVersion.iUserVersion == 0xffff) {
+                if (oGPOVersion.iUserVersion == 0xffff)
+                {
                     oGPOVersion.iUserVersion = 1;
-                } else
+                }
+                else
                 {
                     oGPOVersion.iUserVersion += 1;
                 }
@@ -610,7 +617,8 @@ namespace StandIn
 
             if (bComputer)
             {
-                if (oGPOVersion.iComputerVersion == 0xffff) {
+                if (oGPOVersion.iComputerVersion == 0xffff)
+                {
                     oGPOVersion.iComputerVersion = 1;
                 }
                 else
@@ -648,7 +656,7 @@ namespace StandIn
 
                 if (oRecord.wType == 0)
                 {
-                    Int64 iMSTS = (Marshal.ReadInt64(pData)/10)/1000;
+                    Int64 iMSTS = (Marshal.ReadInt64(pData) / 10) / 1000;
                     Console.WriteLine("    |_ DNS_RPC_RECORD_TS : " + (new DateTime(1601, 1, 1)).AddMilliseconds(iMSTS));
                 }
                 else if (oRecord.wType == 1)
@@ -757,7 +765,8 @@ namespace StandIn
                 }
 
                 Marshal.FreeHGlobal(pObject);
-            } catch (Exception ex)
+            }
+            catch (Exception ex)
             {
                 Console.WriteLine("    |_ Failed to parse DNS entry..");
                 if (ex.InnerException != null)

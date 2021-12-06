@@ -1,0 +1,4 @@
+C:\Users\b1gbroth3r\source\repos\StandIn\StandIn\StandIn\obj\Release\StandIn.csproj.AssemblyReference.cache
+C:\Users\b1gbroth3r\source\repos\StandIn\StandIn\StandIn\obj\Release\StandIn.csproj.CoreCompileInputs.cache
+C:\Users\b1gbroth3r\source\repos\StandIn\StandIn\StandIn\obj\Release\StandIn.exe
+C:\Users\b1gbroth3r\source\repos\StandIn\StandIn\StandIn\obj\Release\StandIn.pdb

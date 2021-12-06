@@ -41,7 +41,8 @@ namespace StandIn
                 {
                     Console.WriteLine("[!] Object not found..");
                     return;
-                } else if (oObject.Count > 1)
+                }
+                else if (oObject.Count > 1)
                 {
                     Console.WriteLine("[!] Invalid search, multiple results returned..");
                     return;
@@ -62,7 +63,8 @@ namespace StandIn
                         Console.WriteLine("\n[?] Iterating object properties");
                         Console.WriteLine("    |_ Applying property filter => " + sFilter + "\n");
                         Array.ForEach(sFilter.Split(','), e => lFilterProperties.Add(e.Trim()));
-                    } else
+                    }
+                    else
                     {
                         Console.WriteLine("\n[?] Iterating object properties\n");
                     }
@@ -97,10 +99,12 @@ namespace StandIn
                             if (kerbTime == long.MaxValue)
                             {
                                 Console.WriteLine("    |_ 0x7FFFFFFFFFFFFFFF");
-                            } else if (kerbTime == 0)
+                            }
+                            else if (kerbTime == 0)
                             {
                                 Console.WriteLine("    |_ 0x0");
-                            } else
+                            }
+                            else
                             {
                                 Console.WriteLine("    |_ " + DateTime.FromFileTimeUtc((long)omProps[sKey][0]) + " UTC");
                             }
@@ -129,7 +133,8 @@ namespace StandIn
                             try
                             {
                                 Console.WriteLine("    |_ " + (hStandIn.USER_ACCOUNT_CONTROL)omProps[sKey][0]);
-                            } catch
+                            }
+                            catch
                             {
                                 Console.WriteLine("    |_ " + omProps[sKey][0]);
                             }
@@ -186,7 +191,8 @@ namespace StandIn
                     }
                 }
 
-            } catch
+            }
+            catch
             {
                 Console.WriteLine("[!] Failed to enumerate object properties..");
                 return;
@@ -402,7 +408,8 @@ namespace StandIn
             if (String.IsNullOrEmpty(sFilter))
             {
                 ds.Filter = "(&(displayName=*)(gpcfilesyspath=*))";
-            } else
+            }
+            else
             {
                 ds.Filter = String.Format("(&(gpcfilesyspath=*)(|(displayName=*{0}*)(displayName={0}*)(displayName=*{0})))", sFilter);
             }
@@ -460,15 +467,18 @@ namespace StandIn
                                     Console.WriteLine("    Inherited ACE : " + fsar.IsInherited);
                                     Console.WriteLine("    Propagation   : " + fsar.PropagationFlags);
                                 }
-                            } catch
+                            }
+                            catch
                             {
                                 Console.WriteLine("    Error          : Access Denied");
                             }
-                        } else
+                        }
+                        else
                         {
                             Console.WriteLine("    Path           : Not found");
                         }
-                    } else
+                    }
+                    else
                     {
                         // retrieve object properties
                         Console.WriteLine("    DisplayName              : " + omProps["displayname"][0].ToString());
@@ -735,21 +745,23 @@ namespace StandIn
             List<String> lUserRights = new List<String>();
             void addPrivilege(String sRight, String sIndex)
             {
-                if (sRight.Trim().ToLower() == sIndex.ToLower()) {
+                if (sRight.Trim().ToLower() == sIndex.ToLower())
+                {
                     lUserRights.Add(sIndex);
                 }
             }
 
             foreach (String s in hStandIn.userTokenRights)
             {
-                Array.ForEach(sUserRights.Split(','), e =>  addPrivilege(e, s));
+                Array.ForEach(sUserRights.Split(','), e => addPrivilege(e, s));
             }
 
             if (lUserRights.Count == 0)
             {
                 Console.WriteLine("\n[!] No valid user rights identified..");
                 return;
-            } else
+            }
+            else
             {
                 Console.WriteLine("    |_ Rights count: " + lUserRights.Count);
                 foreach (String s in lUserRights)
@@ -781,7 +793,8 @@ namespace StandIn
                 {
                     Console.WriteLine("\n[!] LDAP search did not return any results..");
                     return;
-                } else if (oObject.Count > 1)
+                }
+                else if (oObject.Count > 1)
                 {
                     Console.WriteLine("\n[!] LDAP search returned more than one result..");
                     return;
@@ -802,12 +815,13 @@ namespace StandIn
                 try
                 {
                     userObject = ds.FindOne();
-                } catch
+                }
+                catch
                 {
                     Console.WriteLine("\n[!] LDAP search failed..");
                     return;
                 }
-                
+
                 if (userObject == null)
                 {
                     Console.WriteLine("\n[!] samAccountName did not resolve to identity..");
@@ -844,7 +858,8 @@ namespace StandIn
                     try
                     {
                         Directory.CreateDirectory(sGPOPath + @"\Machine\Microsoft\Windows NT\SecEdit\");
-                    } catch
+                    }
+                    catch
                     {
                         Console.WriteLine("\n[!] Failed to create GPO path..");
                         return;
@@ -892,7 +907,8 @@ namespace StandIn
                                 iCount += 1;
                             }
                         }
-                    } else
+                    }
+                    else
                     {
                         Console.WriteLine("       |_ Adding GPO Privileges");
                         sTmpl = sTmpl + "\r\n[Privilege Rights]\r\n";
@@ -920,7 +936,8 @@ namespace StandIn
                     }
 
                     File.WriteAllText(sGPOPath + @"\Machine\Microsoft\Windows NT\SecEdit\GptTmpl.inf", sTmpl);
-                } else
+                }
+                else
                 {
                     Console.WriteLine("    |_ Creating GptTmpl.inf");
                     String sGptTemplate = "[Unicode]\r\n" +
@@ -952,7 +969,8 @@ namespace StandIn
                     if (mc.Count == 0)
                     {
                         mde.Properties["gPCMachineExtensionNames"].Value = sMachExt + "[{827D319E-6EAC-11D2-A4EA-00C04F79F83A}{803E14A0-B4FB-11D0-A0D0-00A0C90F574B}]";
-                    } else
+                    }
+                    else
                     {
                         List<String> lExt = new List<String>();
                         if (!sMachExt.Contains("[{827D319E-6EAC-11D2-A4EA-00C04F79F83A}{803E14A0-B4FB-11D0-A0D0-00A0C90F574B}]"))
@@ -970,7 +988,8 @@ namespace StandIn
                         }
                         mde.Properties["gPCMachineExtensionNames"].Value = sNewMachExt;
                     }
-                } else
+                }
+                else
                 {
                     Console.WriteLine("       |_ Creating gPCMachineExtensionNames");
                     mde.Properties["gPCMachineExtensionNames"].Add("[{827D319E-6EAC-11D2-A4EA-00C04F79F83A}{803E14A0-B4FB-11D0-A0D0-00A0C90F574B}]");
@@ -1000,11 +1019,13 @@ namespace StandIn
             {
                 sTaskType = "user";
                 sTaskPath = @"\User\Preferences\ScheduledTasks\";
-            } else if (sTaskType.ToLower() == "computer")
+            }
+            else if (sTaskType.ToLower() == "computer")
             {
                 sTaskType = "computer";
                 sTaskPath = @"\Machine\Preferences\ScheduledTasks\";
-            } else
+            }
+            else
             {
                 Console.WriteLine("\n[!] Invalid task type, user/computer..");
                 return;
@@ -1021,21 +1042,24 @@ namespace StandIn
                 if (String.IsNullOrEmpty(sTarget))
                 {
                     sTaskContent = String.Format(@"<ImmediateTaskV2 clsid=""{{9756B581-76EC-4169-9AFC-0CA8D43ADB5F}}"" name=""{1}"" image=""0"" changed=""2019-07-25 14:05:31"" uid=""{4}""><Properties action=""C"" name=""{1}"" runAs=""%LogonDomain%\%LogonUser%"" logonType=""InteractiveToken""><Task version=""1.3""><RegistrationInfo><Author>{0}</Author><Description></Description></RegistrationInfo><Principals><Principal id=""Author""><UserId>%LogonDomain%\%LogonUser%</UserId><LogonType>InteractiveToken</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals><Settings><IdleSettings><Duration>PT10M</Duration><WaitTimeout>PT1H</WaitTimeout><StopOnIdleEnd>true</StopOnIdleEnd><RestartOnIdle>false</RestartOnIdle></IdleSettings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>true</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>true</StopIfGoingOnBatteries><AllowHardTerminate>true</AllowHardTerminate><StartWhenAvailable>true</StartWhenAvailable><RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable><AllowStartOnDemand>true</AllowStartOnDemand><Enabled>true</Enabled><Hidden>false</Hidden><RunOnlyIfIdle>false</RunOnlyIfIdle><WakeToRun>false</WakeToRun><ExecutionTimeLimit>P3D</ExecutionTimeLimit><Priority>7</Priority><DeleteExpiredTaskAfter>PT0S</DeleteExpiredTaskAfter></Settings><Triggers><TimeTrigger><StartBoundary>%LocalTimeXmlEx%</StartBoundary><EndBoundary>%LocalTimeXmlEx%</EndBoundary><Enabled>true</Enabled></TimeTrigger></Triggers><Actions Context=""Author""><Exec><Command>{2}</Command><Arguments>{3}</Arguments></Exec></Actions></Task></Properties></ImmediateTaskV2>", sAuthor, sTaskName, sCommand, sArgs, Guid.NewGuid().ToString());
-                } else
+                }
+                else
                 {
                     sTaskContent = string.Format(@"<ImmediateTaskV2 clsid=""{{9756B581-76EC-4169-9AFC-0CA8D43ADB5F}}"" name=""{1}"" image=""0"" changed=""2019-07-25 14:05:31"" uid=""{4}""><Properties action=""C"" name=""{1}"" runAs=""%LogonDomain%\%LogonUser%"" logonType=""InteractiveToken""><Task version=""1.3""><RegistrationInfo><Author>{0}</Author><Description></Description></RegistrationInfo><Principals><Principal id=""Author""><UserId>%LogonDomain%\%LogonUser%</UserId><LogonType>InteractiveToken</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals><Settings><IdleSettings><Duration>PT10M</Duration><WaitTimeout>PT1H</WaitTimeout><StopOnIdleEnd>true</StopOnIdleEnd><RestartOnIdle>false</RestartOnIdle></IdleSettings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>true</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>true</StopIfGoingOnBatteries><AllowHardTerminate>true</AllowHardTerminate><StartWhenAvailable>true</StartWhenAvailable><RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable><AllowStartOnDemand>true</AllowStartOnDemand><Enabled>true</Enabled><Hidden>false</Hidden><RunOnlyIfIdle>false</RunOnlyIfIdle><WakeToRun>false</WakeToRun><ExecutionTimeLimit>P3D</ExecutionTimeLimit><Priority>7</Priority><DeleteExpiredTaskAfter>PT0S</DeleteExpiredTaskAfter></Settings><Triggers><TimeTrigger><StartBoundary>%LocalTimeXmlEx%</StartBoundary><EndBoundary>%LocalTimeXmlEx%</EndBoundary><Enabled>true</Enabled></TimeTrigger></Triggers><Actions Context=""Author""><Exec><Command>{2}</Command><Arguments>{3}</Arguments></Exec></Actions></Task></Properties><Filters><FilterUser bool=""AND"" not=""0"" name=""{5}"" sid=""{6}""/></Filters></ImmediateTaskV2>", sAuthor, sTaskName, sCommand, sArgs, Guid.NewGuid().ToString(), sTarget, sTargetSID);
                 }
-                
-            } else
+
+            }
+            else
             {
                 if (String.IsNullOrEmpty(sTarget))
                 {
                     sTaskContent = String.Format(@"<ImmediateTaskV2 clsid=""{{9756B581-76EC-4169-9AFC-0CA8D43ADB5F}}"" name=""{1}"" image=""0"" changed=""2019-03-30 23:04:20"" uid=""{4}""><Properties action=""C"" name=""{1}"" runAs=""NT AUTHORITY\System"" logonType=""S4U""><Task version=""1.3""><RegistrationInfo><Author>{0}</Author><Description></Description></RegistrationInfo><Principals><Principal id=""Author""><UserId>NT AUTHORITY\System</UserId><LogonType>S4U</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals><Settings><IdleSettings><Duration>PT10M</Duration><WaitTimeout>PT1H</WaitTimeout><StopOnIdleEnd>true</StopOnIdleEnd><RestartOnIdle>false</RestartOnIdle></IdleSettings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>true</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>true</StopIfGoingOnBatteries><AllowHardTerminate>true</AllowHardTerminate><StartWhenAvailable>true</StartWhenAvailable><RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable><AllowStartOnDemand>true</AllowStartOnDemand><Enabled>true</Enabled><Hidden>false</Hidden><RunOnlyIfIdle>false</RunOnlyIfIdle><WakeToRun>false</WakeToRun><ExecutionTimeLimit>P3D</ExecutionTimeLimit><Priority>7</Priority><DeleteExpiredTaskAfter>PT0S</DeleteExpiredTaskAfter></Settings><Triggers><TimeTrigger><StartBoundary>%LocalTimeXmlEx%</StartBoundary><EndBoundary>%LocalTimeXmlEx%</EndBoundary><Enabled>true</Enabled></TimeTrigger></Triggers><Actions Context=""Author""><Exec><Command>{2}</Command><Arguments>{3}</Arguments></Exec></Actions></Task></Properties></ImmediateTaskV2>", sAuthor, sTaskName, sCommand, sArgs, Guid.NewGuid().ToString());
-                } else
+                }
+                else
                 {
                     sTaskContent = string.Format(@"<ImmediateTaskV2 clsid=""{{9756B581-76EC-4169-9AFC-0CA8D43ADB5F}}"" name=""{1}"" image=""0"" changed=""2019-03-30 23:04:20"" uid=""{4}""><Properties action=""C"" name=""{1}"" runAs=""NT AUTHORITY\System"" logonType=""S4U""><Task version=""1.3""><RegistrationInfo><Author>{0}</Author><Description></Description></RegistrationInfo><Principals><Principal id=""Author""><UserId>NT AUTHORITY\System</UserId><LogonType>S4U</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals><Settings><IdleSettings><Duration>PT10M</Duration><WaitTimeout>PT1H</WaitTimeout><StopOnIdleEnd>true</StopOnIdleEnd><RestartOnIdle>false</RestartOnIdle></IdleSettings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>true</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>true</StopIfGoingOnBatteries><AllowHardTerminate>true</AllowHardTerminate><StartWhenAvailable>true</StartWhenAvailable><RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable><AllowStartOnDemand>true</AllowStartOnDemand><Enabled>true</Enabled><Hidden>false</Hidden><RunOnlyIfIdle>false</RunOnlyIfIdle><WakeToRun>false</WakeToRun><ExecutionTimeLimit>P3D</ExecutionTimeLimit><Priority>7</Priority><DeleteExpiredTaskAfter>PT0S</DeleteExpiredTaskAfter></Settings><Triggers><TimeTrigger><StartBoundary>%LocalTimeXmlEx%</StartBoundary><EndBoundary>%LocalTimeXmlEx%</EndBoundary><Enabled>true</Enabled></TimeTrigger></Triggers><Actions Context=""Author""><Exec><Command>{2}</Command><Arguments>{3}</Arguments></Exec></Actions></Task></Properties><Filters><FilterComputer bool=""AND"" not=""0"" type=""DNS"" name=""{5}""/></Filters></ImmediateTaskV2>", sAuthor, sTaskName, sCommand, sArgs, Guid.NewGuid().ToString(), sTarget);
                 }
-                
+
             }
 
             // Create searcher
@@ -1202,7 +1226,8 @@ namespace StandIn
                         Console.WriteLine("       |_ Creating gPCUserExtensionNames");
                         mde.Properties["gPCUserExtensionNames"].Add("[{00000000-0000-0000-0000-000000000000}{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}][{AADCED64-746C-4633-A97C-D61349046527}{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}]");
                     }
-                } else
+                }
+                else
                 {
                     mde.Properties["versionNumber"].Value = (hStandIn.IncrementGPOVersion(oGPOVer, false, true)).ToString();
 
@@ -1245,7 +1270,7 @@ namespace StandIn
                         mde.Properties["gPCMachineExtensionNames"].Add("[{00000000-0000-0000-0000-000000000000}{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}][{AADCED64-746C-4633-A97C-D61349046527}{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}]");
                     }
                 }
-                
+
                 mde.CommitChanges();
             }
             catch (Exception ex)
@@ -1322,7 +1347,8 @@ namespace StandIn
                 {
                     Console.WriteLine("\n--> Incrementing user version");
                     mde.Properties["versionNumber"].Value = (hStandIn.IncrementGPOVersion(oGPOVer, true, false)).ToString();
-                } else
+                }
+                else
                 {
                     Console.WriteLine("\n--> Incrementing computer version");
                     mde.Properties["versionNumber"].Value = (hStandIn.IncrementGPOVersion(oGPOVer, false, true)).ToString();
@@ -1389,7 +1415,8 @@ namespace StandIn
                     {
                         Console.WriteLine("[!] This host already has a msDS-AllowedToActOnBehalfOfOtherIdentity property..");
                         return;
-                    } else
+                    }
+                    else
                     {
                         RawSecurityDescriptor rs = new RawSecurityDescriptor("O:BAD:(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;" + sObjectSID + ")");
                         Byte[] bDescriptor = new byte[rs.BinaryLength];
@@ -1517,7 +1544,8 @@ namespace StandIn
                 if (credObj != null)
                 {
                     oConObject = new LdapConnection(oConId, credObj);
-                } else
+                }
+                else
                 {
                     oConObject = new LdapConnection(oConId);
                 }
@@ -1546,7 +1574,8 @@ namespace StandIn
                 {
                     oConObject.SendRequest(oLDAPReq);
                     Console.WriteLine("\n[+] Machine account added to AD..");
-                } catch (Exception ex)
+                }
+                catch (Exception ex)
                 {
                     Console.WriteLine("\n[!] Failed to add machine account to AD..");
                     if (ex.InnerException != null)
@@ -1558,7 +1587,8 @@ namespace StandIn
                         Console.WriteLine("    |_ " + ex.Message);
                     }
                 }
-            } catch (Exception ex)
+            }
+            catch (Exception ex)
             {
                 Console.WriteLine("[!] Failed to resolve domain properties..");
                 if (ex.InnerException != null)
@@ -1624,17 +1654,20 @@ namespace StandIn
                             mde.Properties["userAccountControl"].Value = iAcctCon | 0x2;
                             mde.CommitChanges();
                             Console.WriteLine("    |_ Account disabled..");
-                        } catch
+                        }
+                        catch
                         {
                             Console.WriteLine("\n[!] Failed to disable machine account..");
                         }
-                    } else
+                    }
+                    else
                     {
                         Console.WriteLine("\n[+] Machine account already disabled");
                         Console.WriteLine("    |_ Exiting..");
                     }
                 }
-            } catch (Exception ex)
+            }
+            catch (Exception ex)
             {
                 Console.WriteLine("[!] Failed to resolve domain object..");
                 if (ex.InnerException != null)
@@ -1788,7 +1821,8 @@ namespace StandIn
                                 }
                             }
                         }
-                    } catch
+                    }
+                    catch
                     {
                         Console.WriteLine("[!] Failed to resolve object access properties..");
                     }
@@ -1858,24 +1892,28 @@ namespace StandIn
                             ActiveDirectoryAccessRule ar = new ActiveDirectoryAccessRule(ir, ActiveDirectoryRights.GenericAll, AccessControlType.Allow, ActiveDirectorySecurityInheritance.None);
                             mde.Options.SecurityMasks = System.DirectoryServices.SecurityMasks.Dacl;
                             mde.ObjectSecurity.AddAccessRule(ar);
-                        } else if (oAccess == hStandIn.AccessRequest.genericwrite)
+                        }
+                        else if (oAccess == hStandIn.AccessRequest.genericwrite)
                         {
                             ActiveDirectoryAccessRule ar = new ActiveDirectoryAccessRule(ir, ActiveDirectoryRights.GenericWrite, AccessControlType.Allow, ActiveDirectorySecurityInheritance.None);
                             mde.Options.SecurityMasks = System.DirectoryServices.SecurityMasks.Dacl;
                             mde.ObjectSecurity.AddAccessRule(ar);
-                        } else if (oAccess == hStandIn.AccessRequest.resetpassword)
+                        }
+                        else if (oAccess == hStandIn.AccessRequest.resetpassword)
                         {
                             Guid rightGuid = new Guid("00299570-246d-11d0-a768-00aa006e0529"); // User-Force-Change-Password
                             ActiveDirectoryAccessRule ar = new ActiveDirectoryAccessRule(ir, ActiveDirectoryRights.ExtendedRight, AccessControlType.Allow, rightGuid, ActiveDirectorySecurityInheritance.None);
                             mde.Options.SecurityMasks = System.DirectoryServices.SecurityMasks.Dacl;
                             mde.ObjectSecurity.AddAccessRule(ar);
-                        } else if (oAccess == hStandIn.AccessRequest.writemembers)
+                        }
+                        else if (oAccess == hStandIn.AccessRequest.writemembers)
                         {
                             Guid rightGuid = new Guid("bf9679c0-0de6-11d0-a285-00aa003049e2"); // Member
                             ActiveDirectoryAccessRule ar = new ActiveDirectoryAccessRule(ir, ActiveDirectoryRights.ExtendedRight, AccessControlType.Allow, rightGuid, ActiveDirectorySecurityInheritance.None);
                             mde.Options.SecurityMasks = System.DirectoryServices.SecurityMasks.Dacl;
                             mde.ObjectSecurity.AddAccessRule(ar);
-                        } else if (oAccess == hStandIn.AccessRequest.dcsync)
+                        }
+                        else if (oAccess == hStandIn.AccessRequest.dcsync)
                         {
                             Guid rightGuid = new Guid("1131f6aa-9c07-11d1-f79f-00c04fc2dcd2"); // DS-Replication-Get-Change
                             ActiveDirectoryAccessRule ar = new ActiveDirectoryAccessRule(ir, ActiveDirectoryRights.ExtendedRight, AccessControlType.Allow, rightGuid, ActiveDirectorySecurityInheritance.None);
@@ -1891,7 +1929,8 @@ namespace StandIn
                             ar = new ActiveDirectoryAccessRule(ir, ActiveDirectoryRights.ExtendedRight, AccessControlType.Allow, rightGuid, ActiveDirectorySecurityInheritance.None);
                             mde.Options.SecurityMasks = System.DirectoryServices.SecurityMasks.Dacl;
                             mde.ObjectSecurity.AddAccessRule(ar);
-                        } else if (!String.IsNullOrEmpty(sGUID))
+                        }
+                        else if (!String.IsNullOrEmpty(sGUID))
                         {
                             Guid rightGuid = new Guid(sGUID); // Custom rights guid
                             ActiveDirectoryAccessRule ar = new ActiveDirectoryAccessRule(ir, ActiveDirectoryRights.ExtendedRight, AccessControlType.Allow, rightGuid, ActiveDirectorySecurityInheritance.None);
@@ -1903,7 +1942,8 @@ namespace StandIn
                         if (Enum.GetName(typeof(hStandIn.AccessRequest), oAccess) != "none")
                         {
                             Console.WriteLine("    |_ Success, added " + Enum.GetName(typeof(hStandIn.AccessRequest), oAccess) + " privileges to object for " + sNTAccount);
-                        } else
+                        }
+                        else
                         {
                             Console.WriteLine("    |_ Success, added GUID rights privilege to object for " + sNTAccount);
                         }
@@ -2035,14 +2075,16 @@ namespace StandIn
                 if (oGroup == null)
                 {
                     Console.WriteLine("[!] Failed to resolve group..");
-                } else
+                }
+                else
                 {
                     Console.WriteLine("\n[+] Adding user to group");
                     oGroup.Members.Add(pc, IdentityType.SamAccountName, sAddUser);
                     oGroup.Save();
                     Console.WriteLine("    |_ Success");
                 }
-            } catch (Exception ex)
+            }
+            catch (Exception ex)
             {
                 Console.WriteLine("[!] Failed add user to group..");
                 if (ex.InnerException != null)
@@ -2086,7 +2128,8 @@ namespace StandIn
                     if (oGroup.Members.Contains(pc, IdentityType.SamAccountName, sRmUser))
                     {
                         oGroup.Members.Remove(pc, IdentityType.SamAccountName, sRmUser);
-                    } else
+                    }
+                    else
                     {
                         Console.WriteLine("[!] User not in specified group..");
                         return;
@@ -2131,7 +2174,8 @@ namespace StandIn
                 {
                     oGroup = GroupPrincipal.FindByIdentity(pc, sGroup);
                     oUser = UserPrincipal.FindByIdentity(pc, IdentityType.SamAccountName, sGroup);
-                } catch { }
+                }
+                catch { }
                 if (oGroup != null)
                 {
                     Console.WriteLine("[?] Type     : Group resolution");
@@ -2159,7 +2203,8 @@ namespace StandIn
                         Console.WriteLine("    SID            : " + m.Sid);
 
                     }
-                } else if (oUser != null)
+                }
+                else if (oUser != null)
                 {
                     Console.WriteLine("[?] Type     : User resolution");
                     Console.WriteLine("    User     : " + oUser.Name);
@@ -2173,7 +2218,8 @@ namespace StandIn
                         Console.WriteLine("    Type           : SAM_GROUP_OBJECT");
                         Console.WriteLine("    SID            : " + g.Sid);
                     }
-                } else
+                }
+                else
                 {
                     Console.WriteLine("[!] Failed to resolve identity..");
                 }
@@ -2226,7 +2272,7 @@ namespace StandIn
                         if (omProps["servicePrincipalName"].Count > 1)
                         {
                             List<String> servicePrincipalName = new List<String>();
-                            
+
                             foreach (var element in omProps["servicePrincipalName"])
                             {
                                 servicePrincipalName.Add(element.ToString());
@@ -2243,7 +2289,8 @@ namespace StandIn
                         try
                         {
                             lastPwdSet = (long)omProps["pwdlastset"][0];
-                        } catch { }
+                        }
+                        catch { }
                         if (lastPwdSet == long.MaxValue)
                         {
                             Console.WriteLine("    PwdLastSet             : 0x7FFFFFFFFFFFFFFF");
@@ -2271,7 +2318,8 @@ namespace StandIn
                             {
                                 Console.WriteLine("    lastlogon              : " + DateTime.FromFileTimeUtc((long)omProps["lastlogon"][0]) + " UTC");
                             }
-                        } catch
+                        }
+                        catch
                         {
                             try
                             {
@@ -2288,17 +2336,20 @@ namespace StandIn
                                 {
                                     Console.WriteLine("    lastlogontimestamp     : " + DateTime.FromFileTimeUtc((long)omProps["lastlogontimestamp"][0]) + " UTC");
                                 }
-                            } catch
+                            }
+                            catch
                             {
                                 Console.WriteLine("    lastlogontimestamp     : N/A");
                             }
                         }
                         hStandIn.SUPPORTED_ETYPE etypes = (hStandIn.SUPPORTED_ETYPE)0;
-                        if (omProps.Contains("msDS-SupportedEncryptionTypes")) {
+                        if (omProps.Contains("msDS-SupportedEncryptionTypes"))
+                        {
                             etypes = (hStandIn.SUPPORTED_ETYPE)omProps["msDS-SupportedEncryptionTypes"][0];
                         }
                         Console.WriteLine("    Supported ETypes       : " + etypes);
-                    } catch (Exception ex)
+                    }
+                    catch (Exception ex)
                     {
                         Console.WriteLine("[!] Failed to enumerate DirectoryEntry properties..");
                         if (ex.InnerException != null)
@@ -2395,7 +2446,7 @@ namespace StandIn
                                 Console.WriteLine("    ServicePrincipalName   : " + omProps["servicePrincipalName"][0].ToString());
                             }
                         }
-                        
+
                         if (!bRemove)
                         {
                             if (servicePrincipalName.Contains(sPrincipal))
@@ -2628,7 +2679,8 @@ namespace StandIn
                                 if (srProps.Contains("grouptype"))
                                 {
                                     Console.WriteLine("    Inbound Delegation       : " + srProps["samAccountName"][0].ToString() + " [GROUP]");
-                                } else
+                                }
+                                else
                                 {
                                     Console.WriteLine("    Inbound Delegation       : " + srProps["samAccountName"][0].ToString());
                                 }
@@ -2932,7 +2984,8 @@ namespace StandIn
                         try
                         {
                             accountProps = (hStandIn.USER_ACCOUNT_CONTROL)omProps["useraccountcontrol"][0];
-                        } catch
+                        }
+                        catch
                         {
                             Console.WriteLine("[!] Failed to get userAccountControl property..");
                             return;
@@ -2948,13 +3001,16 @@ namespace StandIn
                         {
                             Console.WriteLine("\n[!] userAccountControl flags already contains DONT_REQUIRE_PREAUTH..");
                             return;
-                        } else if (hasASREP && sRemove)
+                        }
+                        else if (hasASREP && sRemove)
                         {
                             mde.Properties["useraccountcontrol"].Value = accountProps & ~hStandIn.USER_ACCOUNT_CONTROL.DONT_REQUIRE_PREAUTH;
-                        } else if (!hasASREP && !sRemove)
+                        }
+                        else if (!hasASREP && !sRemove)
                         {
                             mde.Properties["useraccountcontrol"].Value = accountProps | hStandIn.USER_ACCOUNT_CONTROL.DONT_REQUIRE_PREAUTH;
-                        } else
+                        }
+                        else
                         {
                             Console.WriteLine("\n[!] userAccountControl flags do not contain DONT_REQUIRE_PREAUTH..");
                             return;
@@ -3020,7 +3076,8 @@ namespace StandIn
                             if (iRoleCount == 0)
                             {
                                 Console.WriteLine("    Role                  : " + role.ToString());
-                            } else
+                            }
+                            else
                             {
                                 Console.WriteLine("                            " + role.ToString());
                             }
@@ -3039,35 +3096,38 @@ namespace StandIn
             }
         }
 
-         public static void GetADTrustRelationships()
-         {
-             try
-             {
-                 Domain oDom = Domain.GetComputerDomain();
-                 String sPDC = oDom.PdcRoleOwner.Name;
-                 String sDomName = oDom.Name;
-                 Console.WriteLine("\n[?] Using DC    : " + sPDC);
-                 Console.WriteLine("    |_ Domain   : " + sDomName);
-         
-                 TrustRelationshipInformationCollection  trustsCollection = oDom.GetAllTrustRelationships();
-         
-                 if (trustsCollection.Count < 1){
-                     Console.WriteLine("\n[!] No trust relationships to display..");
-                 } else {
-                     foreach (TrustRelationshipInformation trust in trustsCollection)
-                     {
-                         Console.WriteLine("\n[>] Source         : " + trust.SourceName);
-                         Console.WriteLine("    Target         : " + trust.TargetName);
-                         Console.WriteLine("    TrustDirection : " + trust.TrustDirection);
-                         Console.WriteLine("    TrustType      : " + trust.TrustType);
-                     }
-                 }
-             }
-             catch
-             {
-                 Console.WriteLine("[!] Failed to contact the current domain..");
-             }
-         }
+        public static void GetADTrustRelationships()
+        {
+            try
+            {
+                Domain oDom = Domain.GetComputerDomain();
+                String sPDC = oDom.PdcRoleOwner.Name;
+                String sDomName = oDom.Name;
+                Console.WriteLine("\n[?] Using DC    : " + sPDC);
+                Console.WriteLine("    |_ Domain   : " + sDomName);
+
+                TrustRelationshipInformationCollection trustsCollection = oDom.GetAllTrustRelationships();
+
+                if (trustsCollection.Count < 1)
+                {
+                    Console.WriteLine("\n[!] No trust relationships to display..");
+                }
+                else
+                {
+                    foreach (TrustRelationshipInformation trust in trustsCollection)
+                    {
+                        Console.WriteLine("\n[>] Source         : " + trust.SourceName);
+                        Console.WriteLine("    Target         : " + trust.TargetName);
+                        Console.WriteLine("    TrustDirection : " + trust.TrustDirection);
+                        Console.WriteLine("    TrustType      : " + trust.TrustType);
+                    }
+                }
+            }
+            catch
+            {
+                Console.WriteLine("[!] Failed to contact the current domain..");
+            }
+        }
 
         public static void StringToUserOrSID(String sUserId, String sDomain = "", String sUser = "", String sPass = "")
         {
@@ -3091,7 +3151,8 @@ namespace StandIn
                 if (oObject.Count == 1)
                 {
 
-                } else
+                }
+                else
                 {
                     ds.Filter = "objectsid=" + sUserId;
                     oObject = ds.FindAll();
@@ -3120,7 +3181,8 @@ namespace StandIn
                         if (String.IsNullOrEmpty(sUserSam))
                         {
                             sUserSam += (m.Groups[1].Value).ToUpper();
-                        } else
+                        }
+                        else
                         {
                             sUserSam += "." + (m.Groups[1].Value).ToUpper();
                         }
@@ -3131,7 +3193,8 @@ namespace StandIn
                     Console.WriteLine("\n[+] User     : " + sUserSam);
                     Console.WriteLine("    SID      : " + sUserSID);
                 }
-            } catch
+            }
+            catch
             {
                 Console.WriteLine("[!] Failed to identify user..");
                 return;
@@ -3175,12 +3238,14 @@ namespace StandIn
                 if (!bLegacy && !bForest)
                 {
                     sSearchBase += ",CN=MicrosoftDNS,DC=DomainDnsZones," + sDomRoot;
-                } else
+                }
+                else
                 {
                     if (bLegacy)
                     {
                         sSearchBase += ",CN=MicrosoftDNS,CN=System," + sDomRoot;
-                    } else
+                    }
+                    else
                     {
                         sSearchBase += ",CN=MicrosoftDNS,DC=ForestDnsZones," + sForestRoot;
                     }
@@ -3195,7 +3260,7 @@ namespace StandIn
 
                 Console.WriteLine("\n[+] Search Base  : LDAP://" + sSearchBase);
                 Console.WriteLine("[?] Result limit : " + iLimit);
-                
+
                 if (!String.IsNullOrEmpty(sDomain) && !String.IsNullOrEmpty(sUser) && !String.IsNullOrEmpty(sPass))
                 {
                     defNC = new DirectoryEntry("LDAP://" + sSearchBase, sUserDomain, sPass);
@@ -3213,7 +3278,8 @@ namespace StandIn
                 if (!String.IsNullOrEmpty(sFilter))
                 {
                     ds.Filter = String.Format("(&(objectClass=*)(name=*)(dnsRecord=*)(|(name=*{0}*)(name={0}*)(name=*{0})))", sFilter);
-                } else
+                }
+                else
                 {
                     ds.Filter = "(&(objectClass=*)(name=*)(dnsRecord=*))";
                 }
@@ -3320,13 +3386,16 @@ namespace StandIn
                                 if (sProp == "MaxTicketAge")
                                 {
                                     Console.WriteLine("    |_ Kerberos max User ticket lifetime : " + ma.Groups[1].Value);
-                                } else if (sProp == "MaxServiceAge")
+                                }
+                                else if (sProp == "MaxServiceAge")
                                 {
                                     Console.WriteLine("    |_ Kerberos max Service ticket lifetime : " + ma.Groups[1].Value);
-                                } else if (sProp == "MaxRenewAge")
+                                }
+                                else if (sProp == "MaxRenewAge")
                                 {
                                     Console.WriteLine("    |_ Kerberos max User ticket renewal lifetime : " + ma.Groups[1].Value);
-                                } else
+                                }
+                                else
                                 {
                                     Console.WriteLine("    |_ " + sProp + " : " + ma.Groups[1].Value);
                                 }
@@ -3337,12 +3406,14 @@ namespace StandIn
                             Console.WriteLine("\n[!] No properties found, are you sure this is the correct GPO..");
                             return;
                         }
-                    } catch
+                    }
+                    catch
                     {
                         Console.WriteLine("\n[!] Unable to parse GptTmpl..");
                         return;
                     }
-                } else
+                }
+                else
                 {
                     Console.WriteLine("\n[!] GptTmpl not found..");
                     return;
@@ -3377,9 +3448,9 @@ namespace StandIn
 
                 String sSearchBase = String.Empty;
                 sSearchBase += "CN=Enrollment Services,CN=Public Key Services,CN=Services," + sNamingContext;
-                
+
                 Console.WriteLine("\n[+] Search Base  : LDAP://" + sSearchBase);
-                
+
                 if (!String.IsNullOrEmpty(sDomain) && !String.IsNullOrEmpty(sUser) && !String.IsNullOrEmpty(sPass))
                 {
                     defNC = new DirectoryEntry("LDAP://" + sSearchBase, sUserDomain, sPass);
@@ -3388,12 +3459,12 @@ namespace StandIn
                 {
                     defNC = new DirectoryEntry("LDAP://" + sSearchBase);
                 }
-                
+
                 // Search
                 DirectorySearcher ds = new DirectorySearcher(defNC);
                 ds.Filter = "(objectCategory=pKIEnrollmentService)";
                 SearchResultCollection src = ds.FindAll();
-                
+
                 foreach (SearchResult sr in src)
                 {
                     String sCA = sr.Properties["name"][0].ToString();
@@ -3437,11 +3508,12 @@ namespace StandIn
                             if (String.IsNullOrEmpty(sFilter))
                             {
                                 ds.Filter = "(objectclass=pKICertificateTemplate)";
-                            } else
+                            }
+                            else
                             {
                                 ds.Filter = String.Format("(&(objectclass=pKICertificateTemplate)(|(name=*{0}*)(name={0}*)(name=*{0})))", sFilter);
                             }
-                            
+
                             src = ds.FindAll();
 
                             foreach (SearchResult srt in src)
@@ -3452,6 +3524,10 @@ namespace StandIn
                                 {
                                     Console.WriteLine("\n[>] Publishing CA          : " + sCA);
                                     Console.WriteLine("    |_ Template            : " + srt.Properties["name"][0].ToString());
+                                    if (srt.Properties.Contains("mspki-ra-signature"))
+                                    {
+                                        Console.WriteLine("    |_ Signatures          : " + srt.Properties["mspki-ra-signature"][0].ToString());
+                                    }
                                     if (srt.Properties.Contains("mspki-template-schema-version"))
                                     {
                                         Console.WriteLine("    |_ Schema Version      : " + srt.Properties["mspki-template-schema-version"][0].ToString());
@@ -3482,7 +3558,8 @@ namespace StandIn
                                                 if (e == 0)
                                                 {
                                                     Console.WriteLine("    |_ pKIExtendedKeyUsage : " + (new Oid(srt.Properties["pKIExtendedKeyUsage"][e].ToString())).FriendlyName);
-                                                } else
+                                                }
+                                                else
                                                 {
                                                     Console.WriteLine("    |                        " + (new Oid(srt.Properties["pKIExtendedKeyUsage"][e].ToString())).FriendlyName);
                                                 }
@@ -3536,7 +3613,8 @@ namespace StandIn
                                 }
                             }
 
-                        } else
+                        }
+                        else
                         {
                             Console.WriteLine("    |_ Published Templates : None");
                         }
@@ -3557,7 +3635,7 @@ namespace StandIn
             }
         }
 
-        public static void ModifyADCSTemplate(String sFilter, Boolean bEKU, Boolean bNameFalg, Boolean bEnrollFlag, Boolean bRemove, String sDomain = "", String sUser = "", String sPass = "")
+        public static void ModifyADCSTemplate(String sFilter, Boolean bEKU, Boolean bNameFalg, Boolean bEnrollFlag, Boolean bRemove, Boolean bSignature, String sDomain = "", String sUser = "", String sPass = "")
         {
             try
             {
@@ -3632,7 +3710,8 @@ namespace StandIn
                             {
                                 Console.WriteLine("\n[>] CA " + sCA + " does not publish this template..");
                                 continue;
-                            } else if (src.Count > 1)
+                            }
+                            else if (src.Count > 1)
                             {
                                 Console.WriteLine("[!] More than one ADCS template found..");
                                 return;
@@ -3734,7 +3813,8 @@ namespace StandIn
                                         mde.Properties["pKIExtendedKeyUsage"].Value = (Array)lEKU.ToArray();
 
                                     }
-                                } else if (bNameFalg)
+                                }
+                                else if (bNameFalg)
                                 {
                                     // Update Name Flag
                                     hStandIn.msPKICertificateNameFlag oNameFlags;
@@ -3758,7 +3838,7 @@ namespace StandIn
                                             Console.WriteLine("\n[!] msPKI-Certificate-Name-Flag already has ENROLLEE_SUPPLIES_SUBJECT..");
                                             return;
                                         }
-                                    
+
                                         Console.WriteLine("\n[+] Adding msPKI-Certificate-Name-Flag : ENROLLEE_SUPPLIES_SUBJECT");
                                         mde.Properties["mspki-certificate-name-flag"].Value = (Int32)(oNameFlags | hStandIn.msPKICertificateNameFlag.ENROLLEE_SUPPLIES_SUBJECT);
                                     }
@@ -3773,7 +3853,8 @@ namespace StandIn
                                         Console.WriteLine("\n[+] Removing msPKI-Certificate-Name-Flag : ENROLLEE_SUPPLIES_SUBJECT");
                                         mde.Properties["mspki-certificate-name-flag"].Value = (Int32)(oNameFlags & ~hStandIn.msPKICertificateNameFlag.ENROLLEE_SUPPLIES_SUBJECT);
                                     }
-                                } else if (bEnrollFlag)
+                                }
+                                else if (bEnrollFlag)
                                 {
                                     // Update Enroll Flag
                                     hStandIn.msPKIEnrollmentFlag oEnrollFlags;
@@ -3812,6 +3893,21 @@ namespace StandIn
                                         Console.WriteLine("\n[+] Removing msPKI-Enrollment-Flag : PEND_ALL_REQUESTS");
                                         mde.Properties["mspki-enrollment-flag"].Value = (Int32)(oEnrollFlags & ~hStandIn.msPKIEnrollmentFlag.PEND_ALL_REQUESTS);
                                     }
+                                }
+                                else if (bSignature)
+                                {
+                                    var currentSigVal = (int)mde.Properties["mspki-ra-signature"].Value;
+
+                                    if (currentSigVal == 0)
+                                    {
+                                        Console.WriteLine("\n[!] msPKI-RA-Signature flag is already set to 0");
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine("\n[+] Removing msPKI-RA-Signature Flag..");
+                                        mde.Properties["mspki-ra-signature"].Value = 0;
+                                    }
+
                                 }
 
                                 mde.CommitChanges();
@@ -3988,7 +4084,8 @@ namespace StandIn
                                         ActiveDirectoryAccessRule ar = new ActiveDirectoryAccessRule(ir, ActiveDirectoryRights.ExtendedRight, AccessControlType.Allow, rightGuid, ActiveDirectorySecurityInheritance.None);
                                         mde.Options.SecurityMasks = System.DirectoryServices.SecurityMasks.Dacl;
                                         mde.ObjectSecurity.RemoveAccessRule(ar);
-                                    } else
+                                    }
+                                    else
                                     {
                                         Console.WriteLine("\n[+] Adding Certificate-Enrollment permission : " + ir.ToString());
                                         Guid rightGuid = new Guid("0e10c968-78fb-11d2-90d4-00c04f79dc55");
@@ -4219,6 +4316,9 @@ namespace StandIn
 
             [Option(null, "limit")]
             public UInt32 iLimit { get; set; }
+
+            [Option(null, "signature")]
+            public Boolean bSig { get; set; }
         }
 
         static void Main(string[] args)
@@ -4322,7 +4422,8 @@ namespace StandIn
                                 if (ArgOptions.bAdd)
                                 {
                                     addUserToGroup(ArgOptions.sGroup, ArgOptions.sNtaccount, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
-                                } else
+                                }
+                                else
                                 {
                                     removeUserFromGroup(ArgOptions.sGroup, ArgOptions.sNtaccount, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
                                 }
@@ -4396,7 +4497,8 @@ namespace StandIn
                             if (!String.IsNullOrEmpty(ArgOptions.sPrincipal) && ArgOptions.bAdd || ArgOptions.bRemove)
                             {
                                 updateSPNProperty(ArgOptions.sSetSPN, ArgOptions.sPrincipal, ArgOptions.bAdd, ArgOptions.bRemove, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
-                            } else
+                            }
+                            else
                             {
                                 Console.WriteLine("[!] Insufficient arguments provided (--principal/add/remove)..");
                             }
@@ -4409,50 +4511,66 @@ namespace StandIn
                                 {
                                     if (ArgOptions.bAdd)
                                     {
-                                        ModifyADCSTemplate(ArgOptions.sFilter, true, false, false, false, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
-                                    } else
-                                    {
-                                        ModifyADCSTemplate(ArgOptions.sFilter, true, false, false, true, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
-                                    }
-                                } else
-                                {
-                                    Console.WriteLine("[!] Insufficient arguments provided (--filter/--add/--remove)..");
-                                }
-                            } else if (ArgOptions.bESS)
-                            {
-                                if (!String.IsNullOrEmpty(ArgOptions.sFilter) && ArgOptions.bAdd || ArgOptions.bRemove)
-                                {
-                                    if (ArgOptions.bAdd)
-                                    {
-                                        ModifyADCSTemplate(ArgOptions.sFilter, false, true, false, false, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                        ModifyADCSTemplate(ArgOptions.sFilter, true, false, false, false, false, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
                                     }
                                     else
                                     {
-                                        ModifyADCSTemplate(ArgOptions.sFilter, false, true, false, true, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                        ModifyADCSTemplate(ArgOptions.sFilter, true, false, false, true, false, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
                                     }
                                 }
                                 else
                                 {
                                     Console.WriteLine("[!] Insufficient arguments provided (--filter/--add/--remove)..");
                                 }
-                            } else if (ArgOptions.bPend)
+                            }
+                            else if (ArgOptions.bESS)
                             {
                                 if (!String.IsNullOrEmpty(ArgOptions.sFilter) && ArgOptions.bAdd || ArgOptions.bRemove)
                                 {
                                     if (ArgOptions.bAdd)
                                     {
-                                        ModifyADCSTemplate(ArgOptions.sFilter, false, false, true, false, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                        ModifyADCSTemplate(ArgOptions.sFilter, false, true, false, false, false, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
                                     }
                                     else
                                     {
-                                        ModifyADCSTemplate(ArgOptions.sFilter, false, false, true, true, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                        ModifyADCSTemplate(ArgOptions.sFilter, false, true, false, true, false, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
                                     }
                                 }
                                 else
                                 {
                                     Console.WriteLine("[!] Insufficient arguments provided (--filter/--add/--remove)..");
                                 }
-                            } else if (!String.IsNullOrEmpty(ArgOptions.sNtaccount))
+                            }
+                            else if (ArgOptions.bSig)
+                            {
+                                if (!String.IsNullOrEmpty(ArgOptions.sFilter) && ArgOptions.bRemove)
+                                {
+                                    ModifyADCSTemplate(ArgOptions.sFilter, false, false, false, true, true, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                }
+                                else
+                                {
+                                    Console.WriteLine("[!] Insufficient arguments provided (--filter/--remove)..");
+                                }
+                            }
+                            else if (ArgOptions.bPend)
+                            {
+                                if (!String.IsNullOrEmpty(ArgOptions.sFilter) && ArgOptions.bAdd || ArgOptions.bRemove)
+                                {
+                                    if (ArgOptions.bAdd)
+                                    {
+                                        ModifyADCSTemplate(ArgOptions.sFilter, false, false, true, false, false, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                    }
+                                    else
+                                    {
+                                        ModifyADCSTemplate(ArgOptions.sFilter, false, false, true, true, false, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                    }
+                                }
+                                else
+                                {
+                                    Console.WriteLine("[!] Insufficient arguments provided (--filter/--add/--remove)..");
+                                }
+                            }
+                            else if (!String.IsNullOrEmpty(ArgOptions.sNtaccount))
                             {
                                 if (ArgOptions.bOwner)
                                 {
@@ -4501,7 +4619,8 @@ namespace StandIn
                                         Console.WriteLine("[!] Insufficient arguments provided (--filter/--add/--remove)..");
                                     }
                                 }
-                            } else
+                            }
+                            else
                             {
                                 GetADCSTemplates(ArgOptions.sFilter, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
                             }
@@ -4512,7 +4631,8 @@ namespace StandIn
                         Console.WriteLine("[!] Insufficient arguments provided..");
                     }
                 }
-            } else
+            }
+            else
             {
                 hStandIn.getHelp();
             }
