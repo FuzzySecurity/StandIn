@@ -2,3 +2,13 @@ C:\Users\b1gbroth3r\source\repos\StandIn\StandIn\StandIn\obj\Release\StandIn.csp
 C:\Users\b1gbroth3r\source\repos\StandIn\StandIn\StandIn\obj\Release\StandIn.csproj.CoreCompileInputs.cache
 C:\Users\b1gbroth3r\source\repos\StandIn\StandIn\StandIn\obj\Release\StandIn.exe
 C:\Users\b1gbroth3r\source\repos\StandIn\StandIn\StandIn\obj\Release\StandIn.pdb
+C:\Users\b1gbroth3r\source\repos\StandIn\StandIn\StandIn\bin\Release\StandIn.exe.config
+C:\Users\b1gbroth3r\source\repos\StandIn\StandIn\StandIn\bin\Release\StandIn.exe
+C:\Users\b1gbroth3r\source\repos\StandIn\StandIn\StandIn\bin\Release\StandIn.pdb
+C:\Users\b1gbroth3r\source\repos\StandIn\StandIn\StandIn\bin\Release\CommandLine.dll
+C:\Users\b1gbroth3r\source\repos\StandIn\StandIn\StandIn\bin\Release\Costura.dll
+C:\Users\b1gbroth3r\source\repos\StandIn\StandIn\StandIn\bin\Release\System.Runtime.InteropServices.RuntimeInformation.dll
+C:\Users\b1gbroth3r\source\repos\StandIn\StandIn\StandIn\bin\Release\CommandLine.xml
+C:\Users\b1gbroth3r\source\repos\StandIn\StandIn\StandIn\bin\Release\Costura.pdb
+C:\Users\b1gbroth3r\source\repos\StandIn\StandIn\StandIn\bin\Release\Costura.xml
+C:\Users\b1gbroth3r\source\repos\StandIn\StandIn\StandIn\obj\Release\StandIn.csproj.Fody.CopyLocal.cache
