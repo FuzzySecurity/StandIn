@@ -3069,6 +3069,69 @@ namespace StandIn
              }
          }
 
+        public static void GetADSites()
+        {
+            try
+            {
+                Domain oDom = Domain.GetComputerDomain();
+                String sPDC = oDom.PdcRoleOwner.Name;
+                String sDomName = oDom.Name;
+                Console.WriteLine("\n[?] Using DC    : " + sPDC);
+                Console.WriteLine("    |_ Domain   : " + sDomName);
+
+                ReadOnlySiteCollection sitesCollection = oDom.Forest.Sites;
+
+                if (sitesCollection.Count < 1)
+                {
+                    Console.WriteLine("\n[!] No site to display..");
+                }
+                else
+                {
+                    foreach (ActiveDirectorySite site in sitesCollection)
+                    {
+                        Console.WriteLine("\n[*] Site Name : " + site.Name);
+                        if (site.Domains.Count > 0)
+                        {
+                            Console.WriteLine("    Domains                      ");
+                            foreach (Domain domain in site.Domains)
+                            {
+                                Console.WriteLine("    |_  " + domain.Name);
+                            }
+                        }
+                        if (site.Subnets.Count > 0)
+                        {
+                            Console.WriteLine("    Subnets                      ");
+                            foreach (ActiveDirectorySubnet subnet in site.Subnets)
+                            {
+                                Console.WriteLine("    |_  " + subnet);
+                            }
+                        }
+
+                        if (!String.IsNullOrEmpty(site.Location))
+                        {
+                            Console.WriteLine("    Location                     : " + site.Location);
+                        }
+
+                        Console.WriteLine("    Number of server in the site : " + site.Servers.Count);
+
+                        if (site.Servers.Count > 0)
+                        {
+                            Console.WriteLine("    Servers                      ");
+
+                            foreach (DirectoryServer server in site.Servers)
+                            {
+                                Console.WriteLine("    |_ " + server);
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                Console.WriteLine("[!] Failed to contact the current domain..");
+            }
+        }
+
         public static void StringToUserOrSID(String sUserId, String sDomain = "", String sUser = "", String sPass = "")
         {
             // Create searcher
@@ -4150,6 +4213,8 @@ namespace StandIn
 
             [Option(null, "trust")]
             public Boolean bTrust { get; set; }
+            [Option(null, "site")]
+            public Boolean bSite { get; set; }
 
             [Option(null, "remove")]
             public Boolean bRemove { get; set; }
@@ -4233,7 +4298,7 @@ namespace StandIn
                 else
                 {
 
-                    if (!String.IsNullOrEmpty(ArgOptions.sComp) || !String.IsNullOrEmpty(ArgOptions.sObject) || !String.IsNullOrEmpty(ArgOptions.sGroup) || !String.IsNullOrEmpty(ArgOptions.sLdap) || !String.IsNullOrEmpty(ArgOptions.sSid) || !String.IsNullOrEmpty(ArgOptions.sSetSPN) || ArgOptions.bSPN || ArgOptions.bDelegation || ArgOptions.bAsrep || ArgOptions.bDc || ArgOptions.bTrust || ArgOptions.bGPO || ArgOptions.bDNS || ArgOptions.bPolicy || ArgOptions.bPasswdnotreqd || ArgOptions.bADCS)
+                    if (!String.IsNullOrEmpty(ArgOptions.sComp) || !String.IsNullOrEmpty(ArgOptions.sObject) || !String.IsNullOrEmpty(ArgOptions.sGroup) || !String.IsNullOrEmpty(ArgOptions.sLdap) || !String.IsNullOrEmpty(ArgOptions.sSid) || !String.IsNullOrEmpty(ArgOptions.sSetSPN) || ArgOptions.bSPN || ArgOptions.bDelegation || ArgOptions.bAsrep || ArgOptions.bDc || ArgOptions.bTrust || ArgOptions.bSite || ArgOptions.bGPO || ArgOptions.bDNS || ArgOptions.bPolicy || ArgOptions.bPasswdnotreqd || ArgOptions.bADCS)
                     {
                         if (!String.IsNullOrEmpty(ArgOptions.sComp))
                         {
@@ -4351,6 +4416,10 @@ namespace StandIn
                         else if (ArgOptions.bTrust)
                         {
                             GetADTrustRelationships();
+                        }
+                        else if (ArgOptions.bSite)
+                        {
+                            GetADSites();
                         }
                         else if (!String.IsNullOrEmpty(ArgOptions.sLdap))
                         {

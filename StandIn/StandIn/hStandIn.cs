@@ -250,6 +250,7 @@ namespace StandIn
                               "--asrep         Boolean, list ASREP roastable accounts\n" +
                               "--dc            Boolean, list all domain controllers\n" +
                               "--trust         Boolean, list all trust relationships\n" +
+                              "--site          Boolean, list all sites (related subnets, domains, and servers)\n" +
                               "--adcs          List all CA's and all published templates\n" +
                               "--clientauth    Boolean, modify ADCS template to add/remove \"Client Authentication\"\n" +
                               "--ess           Boolean, modify ADCS template to add/remove \"ENROLLEE_SUPPLIES_SUBJECT\"\n" +
@@ -358,6 +359,9 @@ namespace StandIn
 
                               "# Get a list of all trust relationships in the current domain\n" +
                               "StandIn.exe --trust\n\n" +
+
+                              "# Get a list of all the sites and the related subnets\n" +
+                              "StandIn.exe --site\n\n" +
 
                               "# List members of group or list user group membership\n" +
                               "StandIn.exe --group Literarum\n" +
