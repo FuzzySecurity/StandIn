@@ -401,6 +401,12 @@ namespace StandIn
                               "StandIn.exe --adcs --filter Kingsport --ntaccount \"REDHOOK\\MBWillett\" --enroll --add\n" +
                               "StandIn.exe --adcs --filter Kingsport --ntaccount \"REDHOOK\\MBWillett\" --enroll --remove --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
 
+                              "# Removes authorized signatures requirement by setting value to 0, can also restore signature value by specifying --restore <num>, filter should contain exact name of the template\n" +
+                              "StandIn.exe --adcs --filter Kingsport --signature --remove\n" +
+                              "StandIn.exe --adcs --filter Kingsport --signature --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+                              "StandIn.exe --adcs --filter Kingsport --signature --restore 1" +
+                              "StandIn.exe --adcs --filter Kingsport --signature --restore 1 --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
+
                               "# Create machine object\n" +
                               "StandIn.exe --computer Innsmouth --make\n" +
                               "StandIn.exe --computer Innsmouth --make --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
