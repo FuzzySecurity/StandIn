@@ -377,7 +377,7 @@ namespace StandIn
                               "StandIn.exe --adcs --filter Kingsport\n" +
                               "StandIn.exe --adcs --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
 
-                              "# Add/remove \"Client Authentication\" from template pKIExtendedKeyUsage, filter should contain the exact name of the template\n" +
+                              "# Add/remove \"Client Authentication\" from template mspki-certificate-application-policy, filter should contain the exact name of the template\n" +
                               "StandIn.exe --adcs --filter Kingsport --clientauth --add\n" +
                               "StandIn.exe --adcs --filter Kingsport --clientauth --remove --domain redhook --user RFludd --pass Cl4vi$Alchemi4e\n\n" +
 
