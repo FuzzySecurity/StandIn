@@ -3472,19 +3472,19 @@ namespace StandIn
                                     {
                                         Console.WriteLine("    |_ Name Flags          : " + (hStandIn.msPKICertificateNameFlag)Convert.ToInt32(srt.Properties["mspki-certificate-name-flag"][0].ToString()));
                                     }
-                                    if (srt.Properties.Contains("pKIExtendedKeyUsage"))
+                                    if (srt.Properties.Contains("mspki-certificate-application-policy"))
                                     {
-                                        var EKUs = srt.Properties["pKIExtendedKeyUsage"];
+                                        var EKUs = srt.Properties["mspki-certificate-application-policy"];
                                         if (EKUs.Count > 0)
                                         {
                                             for (int e = 0; e < EKUs.Count; e++)
                                             {
                                                 if (e == 0)
                                                 {
-                                                    Console.WriteLine("    |_ pKIExtendedKeyUsage : " + (new Oid(srt.Properties["pKIExtendedKeyUsage"][e].ToString())).FriendlyName);
+                                                    Console.WriteLine("    |_ mspki-certificate-application-policy : " + (new Oid(srt.Properties["mspki-certificate-application-policy"][e].ToString())).FriendlyName);
                                                 } else
                                                 {
-                                                    Console.WriteLine("    |                        " + (new Oid(srt.Properties["pKIExtendedKeyUsage"][e].ToString())).FriendlyName);
+                                                    Console.WriteLine("    |                        " + (new Oid(srt.Properties["mspki-certificate-application-policy"][e].ToString())).FriendlyName);
                                                 }
                                             }
                                         }
@@ -3654,20 +3654,20 @@ namespace StandIn
                                     {
                                         Console.WriteLine("    |_ Name Flags          : " + (hStandIn.msPKICertificateNameFlag)Convert.ToInt32(srt.Properties["mspki-certificate-name-flag"][0].ToString()));
                                     }
-                                    if (srt.Properties.Contains("pKIExtendedKeyUsage"))
+                                    if (srt.Properties.Contains("mspki-certificate-application-policy"))
                                     {
-                                        var EKUs = srt.Properties["pKIExtendedKeyUsage"];
+                                        var EKUs = srt.Properties["mspki-certificate-application-policy"];
                                         if (EKUs.Count > 0)
                                         {
                                             for (int e = 0; e < EKUs.Count; e++)
                                             {
                                                 if (e == 0)
                                                 {
-                                                    Console.WriteLine("    |_ pKIExtendedKeyUsage : " + (new Oid(srt.Properties["pKIExtendedKeyUsage"][e].ToString())).FriendlyName);
+                                                    Console.WriteLine("    |_ mspki-certificate-application-policy : " + (new Oid(srt.Properties["mspki-certificate-application-policy"][e].ToString())).FriendlyName);
                                                 }
                                                 else
                                                 {
-                                                    Console.WriteLine("    |                        " + (new Oid(srt.Properties["pKIExtendedKeyUsage"][e].ToString())).FriendlyName);
+                                                    Console.WriteLine("    |                        " + (new Oid(srt.Properties["mspki-certificate-application-policy"][e].ToString())).FriendlyName);
                                                 }
                                             }
                                         }
@@ -3691,14 +3691,14 @@ namespace StandIn
                                     List<String> lEKU = new List<String>();
                                     try
                                     {
-                                        foreach (var element in omProps["pKIExtendedKeyUsage"])
+                                        foreach (var element in omProps["mspki-certificate-application-policy"])
                                         {
                                             lEKU.Add(element.ToString());
                                         }
                                     }
                                     catch
                                     {
-                                        Console.WriteLine("[!] Failed to get pKIExtendedKeyUsage property..");
+                                        Console.WriteLine("[!] Failed to get mspki-certificate-application-policy property..");
                                         return;
                                     }
 
@@ -3706,32 +3706,32 @@ namespace StandIn
                                     {
                                         if (lEKU.Contains("1.3.6.1.5.5.7.3.2"))
                                         {
-                                            Console.WriteLine("\n[!] pKIExtendedKeyUsage already allows client authentication..");
+                                            Console.WriteLine("\n[!] mspki-certificate-application-policy already allows client authentication..");
                                             return;
                                         }
 
-                                        Console.WriteLine("\n[+] Adding pKIExtendedKeyUsage : Client Authentication");
+                                        Console.WriteLine("\n[+] Adding mspki-certificate-application-policy : Client Authentication");
                                         lEKU.Add("1.3.6.1.5.5.7.3.2");
-                                        mde.Properties["pKIExtendedKeyUsage"].Value = (Array)lEKU.ToArray();
+                                        mde.Properties["mspki-certificate-application-policy"].Value = (Array)lEKU.ToArray();
                                     }
                                     else
                                     {
                                         if (lEKU.Count == 0)
                                         {
-                                            Console.WriteLine("\n[!] pKIExtendedKeyUsage property does not exist..");
+                                            Console.WriteLine("\n[!] mspki-certificate-application-policy property does not exist..");
                                             return;
                                         }
 
                                         if (!lEKU.Contains("1.3.6.1.5.5.7.3.2"))
                                         {
-                                            Console.WriteLine("\n[!] pKIExtendedKeyUsage already disallows client authentication..");
+                                            Console.WriteLine("\n[!] mspki-certificate-application-policy already disallows client authentication..");
                                             return;
                                         }
 
-                                        Console.WriteLine("\n[+] Removing pKIExtendedKeyUsage : Client Authentication");
+                                        Console.WriteLine("\n[+] Removing mspki-certificate-application-policy : Client Authentication");
 
                                         lEKU.Remove("1.3.6.1.5.5.7.3.2");
-                                        mde.Properties["pKIExtendedKeyUsage"].Value = (Array)lEKU.ToArray();
+                                        mde.Properties["mspki-certificate-application-policy"].Value = (Array)lEKU.ToArray();
 
                                     }
                                 } else if (bNameFalg)
@@ -3938,20 +3938,20 @@ namespace StandIn
                                     {
                                         Console.WriteLine("    |_ Name Flags          : " + (hStandIn.msPKICertificateNameFlag)Convert.ToInt32(srt.Properties["mspki-certificate-name-flag"][0].ToString()));
                                     }
-                                    if (srt.Properties.Contains("pKIExtendedKeyUsage"))
+                                    if (srt.Properties.Contains("mspki-certificate-application-policy"))
                                     {
-                                        var EKUs = srt.Properties["pKIExtendedKeyUsage"];
+                                        var EKUs = srt.Properties["mspki-certificate-application-policy"];
                                         if (EKUs.Count > 0)
                                         {
                                             for (int e = 0; e < EKUs.Count; e++)
                                             {
                                                 if (e == 0)
                                                 {
-                                                    Console.WriteLine("    |_ pKIExtendedKeyUsage : " + (new Oid(srt.Properties["pKIExtendedKeyUsage"][e].ToString())).FriendlyName);
+                                                    Console.WriteLine("    |_ mspki-certificate-application-policy : " + (new Oid(srt.Properties["mspki-certificate-application-policy"][e].ToString())).FriendlyName);
                                                 }
                                                 else
                                                 {
-                                                    Console.WriteLine("    |                        " + (new Oid(srt.Properties["pKIExtendedKeyUsage"][e].ToString())).FriendlyName);
+                                                    Console.WriteLine("    |                        " + (new Oid(srt.Properties["mspki-certificate-application-policy"][e].ToString())).FriendlyName);
                                                 }
                                             }
                                         }
