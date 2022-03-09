@@ -3557,7 +3557,7 @@ namespace StandIn
             }
         }
 
-        public static void ModifyADCSTemplate(String sFilter, Boolean bEKU, Boolean bNameFalg, Boolean bEnrollFlag, Boolean bRemove, String sDomain = "", String sUser = "", String sPass = "")
+        public static void ModifyADCSTemplate(String sFilter, Boolean bEKU, Boolean bNameFalg, Boolean bEnrollFlag, Boolean bRemove, Boolean bSignature, int iRestoreValue, String sDomain = "", String sUser = "", String sPass = "")
         {
             try
             {
@@ -3811,6 +3811,26 @@ namespace StandIn
 
                                         Console.WriteLine("\n[+] Removing msPKI-Enrollment-Flag : PEND_ALL_REQUESTS");
                                         mde.Properties["mspki-enrollment-flag"].Value = (Int32)(oEnrollFlags & ~hStandIn.msPKIEnrollmentFlag.PEND_ALL_REQUESTS);
+                                    }
+                                } else if (bSignature)
+                                {
+                                    if (bRemove)
+                                    {
+                                        var currentSigVal = (int)mde.Properties["mspki-ra-signature"].Value;
+                                        if (currentSigVal == 0)
+                                        {
+                                            Console.WriteLine("\n[!] msPKI-RA-Signature flag is already set to 0");
+                                        }
+                                        else
+                                        {
+                                            Console.WriteLine("\n[+] Removing msPKI-RA-Signature flag...");
+                                            mde.Properties["mspki-ra-signature"].Value = 0;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine("\n[+] Restoring msPKI-RA-Signature Value to " + iRestoreValue.ToString());
+                                        mde.Properties["mspki-ra-signature"].Value = iRestoreValue;
                                     }
                                 }
 
@@ -4219,6 +4239,12 @@ namespace StandIn
 
             [Option(null, "limit")]
             public UInt32 iLimit { get; set; }
+
+            [Option(null, "signature")]
+            public Boolean bSig { get; set; }
+
+            [Option(null, "restore")]
+            public int iSigValue { get; set; }
         }
 
         static void Main(string[] args)
@@ -4409,10 +4435,10 @@ namespace StandIn
                                 {
                                     if (ArgOptions.bAdd)
                                     {
-                                        ModifyADCSTemplate(ArgOptions.sFilter, true, false, false, false, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                        ModifyADCSTemplate(ArgOptions.sFilter, true, false, false, false, false, ArgOptions.iSigValue = 0, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
                                     } else
                                     {
-                                        ModifyADCSTemplate(ArgOptions.sFilter, true, false, false, true, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                        ModifyADCSTemplate(ArgOptions.sFilter, true, false, false, true, false, ArgOptions.iSigValue = 0, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
                                     }
                                 } else
                                 {
@@ -4424,16 +4450,33 @@ namespace StandIn
                                 {
                                     if (ArgOptions.bAdd)
                                     {
-                                        ModifyADCSTemplate(ArgOptions.sFilter, false, true, false, false, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                        ModifyADCSTemplate(ArgOptions.sFilter, false, true, false, false, false, ArgOptions.iSigValue = 0, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
                                     }
                                     else
                                     {
-                                        ModifyADCSTemplate(ArgOptions.sFilter, false, true, false, true, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                        ModifyADCSTemplate(ArgOptions.sFilter, false, true, false, true, false, ArgOptions.iSigValue = 0, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
                                     }
                                 }
                                 else
                                 {
                                     Console.WriteLine("[!] Insufficient arguments provided (--filter/--add/--remove)..");
+                                }
+                            } else if (ArgOptions.bSig)
+                            {
+                                if (!String.IsNullOrEmpty(ArgOptions.sFilter) && ArgOptions.bRemove || (ArgOptions.iSigValue > 0))
+                                {
+                                    if (ArgOptions.iSigValue > 0)
+                                    {
+                                        ModifyADCSTemplate(ArgOptions.sFilter, false, false, false, false, true, ArgOptions.iSigValue, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                    }
+                                    else
+                                    {
+                                        ModifyADCSTemplate(ArgOptions.sFilter, false, false, false, true, true, ArgOptions.iSigValue = 0, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                    }
+                                }
+                                else
+                                {
+                                    Console.WriteLine("[!] Insufficient arguments provided (--filter/--remove/--restore <val>)..");
                                 }
                             } else if (ArgOptions.bPend)
                             {
@@ -4441,11 +4484,11 @@ namespace StandIn
                                 {
                                     if (ArgOptions.bAdd)
                                     {
-                                        ModifyADCSTemplate(ArgOptions.sFilter, false, false, true, false, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                        ModifyADCSTemplate(ArgOptions.sFilter, false, false, true, false, false, ArgOptions.iSigValue = 0, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
                                     }
                                     else
                                     {
-                                        ModifyADCSTemplate(ArgOptions.sFilter, false, false, true, true, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                        ModifyADCSTemplate(ArgOptions.sFilter, false, false, true, true, false, ArgOptions.iSigValue = 0, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
                                     }
                                 }
                                 else
