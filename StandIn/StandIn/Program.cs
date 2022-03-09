@@ -4471,7 +4471,7 @@ namespace StandIn
                                     }
                                     else
                                     {
-                                        ModifyADCSTemplate(ArgOptions.sFilter, false, false, false, true, false, ArgOptions.iSigValue = 0, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                                        ModifyADCSTemplate(ArgOptions.sFilter, false, false, false, true, true, ArgOptions.iSigValue = 0, ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
                                     }
                                 }
                                 else
