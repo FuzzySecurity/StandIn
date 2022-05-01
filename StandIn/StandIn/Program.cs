@@ -2325,6 +2325,256 @@ namespace StandIn
                 }
             }
         }
+        public static void getSPNAccountsWithOpsec(String sDomain = "", String sUser = "", String sPass = "", String sFilter = "")
+        {
+            // Create searcher
+            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass);
+            if (!so.success)
+            {
+                Console.WriteLine("[!] Failed to create directory searcher..");
+                return;
+            }
+            DirectorySearcher ds = so.searcher;
+
+            // Search filter
+            ds.Filter = "(objectCategory=organizationalUnit)";
+
+            List<String> OUListToCheck = new List<string>();
+
+            List<String> OUListFound = new List<string>();
+
+            List<DirectoryEntries> OUChildren = new List<DirectoryEntries>();
+
+
+            if (!String.IsNullOrEmpty(sFilter))
+            {
+                foreach (string ou in sFilter.Split(','))
+                {
+                    OUListToCheck.Add(ou.ToLower());
+                }
+            }
+            else
+            {
+                //default OUs name that could contains service accounts
+                OUListToCheck.Add("service");
+                OUListToCheck.Add("application");
+            }
+
+            try
+            {
+                // Search
+                SearchResultCollection oObject = ds.FindAll();
+
+                Console.WriteLine("[?] Found " + oObject.Count + " OUs..");
+                Console.WriteLine("[?] Filtering organizational units with keyword(s): " + String.Join(",", OUListToCheck.ToArray()));
+
+                foreach (SearchResult sr in oObject)
+                {
+                    try
+                    {
+                        DirectoryEntry mde = sr.GetDirectoryEntry();
+
+                        ResultPropertyCollection omProps = sr.Properties;
+
+                        String path = omProps["distinguishedName"][0].ToString();
+
+                        foreach (string ou in OUListToCheck)
+                        {
+                            if (path.ToLower().Contains(ou))
+                            {
+                                Console.WriteLine(" |_ " + path);
+                                OUListFound.Add(omProps["adspath"][0].ToString());
+                                OUChildren.Add(mde.Children);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("[!] Failed to enumerate DirectoryEntry properties..");
+                        if (ex.InnerException != null)
+                        {
+                            Console.WriteLine("    |_ " + ex.InnerException.Message);
+                        }
+                        else
+                        {
+                            Console.WriteLine("    |_ " + ex.Message);
+                        }
+                    }
+
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[!] Failed to enumerate OUs..");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine("    |_ " + ex.InnerException.Message);
+                }
+                else
+                {
+                    Console.WriteLine("    |_ " + ex.Message);
+                }
+            }
+
+            Console.WriteLine("[*] Found "+ OUListFound.Count +" interestings(s) organizational unit(s)");
+
+            if (OUListFound.Count < 1)
+            {
+                Console.WriteLine("[!] Failed to enumerate OUs that could contain service accounts ...");
+                return;
+            }
+
+            foreach (DirectoryEntries child in OUChildren)
+            {
+
+                try
+                {
+
+                    foreach (DirectoryEntry d in child)
+                    {
+                        try
+                        {
+                            //filtering based on "(&(samAccountType=805306368)(servicePrincipalName=*)(!samAccountName=krbtgt)(!(UserAccountControl:1.2.840.113556.1.4.803:=2))"
+
+                            PropertyCollection omProps = d.Properties;
+
+                            if (omProps["samAccountType"][0].ToString() != "805306368")
+                            {
+                                continue;
+                            }
+
+                            hStandIn.USER_ACCOUNT_CONTROL userAccountControl = (hStandIn.USER_ACCOUNT_CONTROL)omProps["useraccountcontrol"][0];
+
+                            if (userAccountControl.ToString().Contains("ACCOUNTDISABLE"))
+                            {
+                                continue;
+                            }
+
+                            if (!omProps.Contains("servicePrincipalName"))
+                            {
+                                continue;
+                            }
+
+                            Console.WriteLine("\n[*] SamAccountName         : " + omProps["samAccountName"][0].ToString());
+                            Console.WriteLine("    DistinguishedName      : " + omProps["distinguishedName"][0].ToString());
+
+                            if (omProps["servicePrincipalName"].Count > 1)
+                            {
+                                List<String> servicePrincipalName = new List<String>();
+
+                                foreach (var element in omProps["servicePrincipalName"])
+                                {
+                                    servicePrincipalName.Add(element.ToString());
+                                }
+                                Console.WriteLine("    ServicePrincipalName   : " + String.Join("\n                             ", servicePrincipalName.ToArray()));
+                            }
+                            else
+                            {
+                                Console.WriteLine("    ServicePrincipalName   : " + omProps["servicePrincipalName"][0].ToString());
+
+                            }
+
+                            Console.WriteLine("    WhenCreated            : " + omProps["whenCreated"][0].ToString());
+
+                            long lastPwdSet = 0;
+                            try
+                            {
+                                lastPwdSet = (long)omProps["pwdlastset"][0];
+                            }
+                            catch { }
+                            if (lastPwdSet == long.MaxValue)
+                            {
+                                Console.WriteLine("    PwdLastSet             : 0x7FFFFFFFFFFFFFFF");
+                            }
+                            else if (lastPwdSet == 0)
+                            {
+                                Console.WriteLine("    PwdLastSet             : 0x0");
+                            }
+                            else
+                            {
+                                Console.WriteLine("    PwdLastSet             : " + DateTime.FromFileTimeUtc((long)omProps["pwdlastset"][0]) + " UTC");
+                            }
+                            try
+                            {
+                                long logonTimestamp = (long)omProps["lastlogon"][0];
+                                if (logonTimestamp == long.MaxValue)
+                                {
+                                    Console.WriteLine("    lastlogon              : 0x7FFFFFFFFFFFFFFF");
+                                }
+                                else if (logonTimestamp == 0)
+                                {
+                                    Console.WriteLine("    lastlogon              : 0x0");
+                                }
+                                else
+                                {
+                                    Console.WriteLine("    lastlogon              : " + DateTime.FromFileTimeUtc((long)omProps["lastlogon"][0]) + " UTC");
+                                }
+                            }
+                            catch
+                            {
+                                try
+                                {
+                                    long logonTimestamp = (long)omProps["lastlogontimestamp"][0];
+                                    if (logonTimestamp == long.MaxValue)
+                                    {
+                                        Console.WriteLine("    lastlogontimestamp     : 0x7FFFFFFFFFFFFFFF");
+                                    }
+                                    else if (logonTimestamp == 0)
+                                    {
+                                        Console.WriteLine("    lastlogontimestamp     : 0x0");
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine("    lastlogontimestamp     : " + DateTime.FromFileTimeUtc((long)omProps["lastlogontimestamp"][0]) + " UTC");
+                                    }
+                                }
+                                catch
+                                {
+                                    Console.WriteLine("    lastlogontimestamp     : N/A");
+                                }
+                            }
+
+                            if (omProps.Contains("msDS-SupportedEncryptionTypes"))
+                            {
+                                hStandIn.SUPPORTED_ETYPE etypes = (hStandIn.SUPPORTED_ETYPE)0;
+
+
+                                if (omProps.Contains("msDS-SupportedEncryptionTypes"))
+                                {
+                                    etypes = (hStandIn.SUPPORTED_ETYPE)omProps["msDS-SupportedEncryptionTypes"][0];
+                                }
+                                Console.WriteLine("    Supported ETypes       : " + etypes);
+                            }
+
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("[!] Failed to enumerate DirectoryEntry properties..");
+                            if (ex.InnerException != null)
+                            {
+                                Console.WriteLine("    |_ " + ex.InnerException.Message);
+                            }
+                            else
+                            {
+                                Console.WriteLine("    |_ " + ex.Message);
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("[!] Failed to enumerate SPN accounts..");
+                    if (ex.InnerException != null)
+                    {
+                        Console.WriteLine("    |_ " + ex.InnerException.Message);
+                    }
+                    else
+                    {
+                        Console.WriteLine("    |_ " + ex.Message);
+                    }
+                }
+            }
+        }
 
         public static void updateSPNProperty(String sSetSPN, String sPrincipal, Boolean bAdd = false, Boolean bRemove = false, String sDomain = "", String sUser = "", String sPass = "")
         {
@@ -3067,7 +3317,94 @@ namespace StandIn
              {
                  Console.WriteLine("[!] Failed to contact the current domain..");
              }
-         }
+        }
+
+        public static void GetADOrganizationalUnits(String sDomain = "", String sUser = "", String sPass = "", String sFilter = "")
+        {
+            // Create searcher
+            hStandIn.SearchObject so = hStandIn.createSearchObject(sDomain, sUser, sPass);
+            if (!so.success)
+            {
+                Console.WriteLine("[!] Failed to create directory searcher..");
+                return;
+            }
+
+            DirectorySearcher ds = so.searcher;
+
+            // Search filter
+            ds.Filter = "(objectCategory=organizationalUnit)";
+
+            List<String> OUListToCheck = new List<string>();
+
+            List<DirectoryEntries> OUChildren = new List<DirectoryEntries>();
+
+            if (!String.IsNullOrEmpty(sFilter))
+            {
+                foreach (string ou in sFilter.Split(','))
+                {
+                    OUListToCheck.Add(ou.ToLower());
+                }
+            }
+
+            try
+            {
+                // Search
+                SearchResultCollection oObject = ds.FindAll();
+
+                Console.WriteLine("[?] Found " + oObject.Count + " Organizational Units");
+
+                if (!String.IsNullOrEmpty(sFilter)){
+                    Console.WriteLine("[?] Filtering organizational units with keyword(s): " + String.Join(",", OUListToCheck.ToArray()));
+                }
+
+                foreach (SearchResult sr in oObject)
+                {
+                    try
+                    {
+                        DirectoryEntry mde = sr.GetDirectoryEntry();
+                        ResultPropertyCollection omProps = sr.Properties;
+                        String distinguishedName = omProps["distinguishedName"][0].ToString();
+
+                        if (OUListToCheck.Count > 0){
+                            foreach (string ou in OUListToCheck)
+                            {
+                                if (distinguishedName.ToLower().Contains(ou))
+                                {
+                                    Console.WriteLine("\n[*] DistinguishedName         : " + distinguishedName);
+                                }
+                            }
+                        } else {
+                            Console.WriteLine("\n[*] DistinguishedName         : " + distinguishedName);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("[!] Failed to enumerate DirectoryEntry properties..");
+                        if (ex.InnerException != null)
+                        {
+                            Console.WriteLine("    |_ " + ex.InnerException.Message);
+                        }
+                        else
+                        {
+                            Console.WriteLine("    |_ " + ex.Message);
+                        }
+                    }
+
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[!] Failed to enumerate Organizational Units..");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine("    |_ " + ex.InnerException.Message);
+                }
+                else
+                {
+                    Console.WriteLine("    |_ " + ex.Message);
+                }
+            }
+        }
 
         public static void StringToUserOrSID(String sUserId, String sDomain = "", String sUser = "", String sPass = "")
         {
@@ -4151,6 +4488,9 @@ namespace StandIn
             [Option(null, "trust")]
             public Boolean bTrust { get; set; }
 
+            [Option(null, "ous")]
+            public Boolean bOus { get; set; }
+
             [Option(null, "remove")]
             public Boolean bRemove { get; set; }
 
@@ -4219,6 +4559,10 @@ namespace StandIn
 
             [Option(null, "limit")]
             public UInt32 iLimit { get; set; }
+
+            [Option(null, "opsec")]
+            public Boolean bOpsec { get; set; }
+
         }
 
         static void Main(string[] args)
@@ -4233,7 +4577,7 @@ namespace StandIn
                 else
                 {
 
-                    if (!String.IsNullOrEmpty(ArgOptions.sComp) || !String.IsNullOrEmpty(ArgOptions.sObject) || !String.IsNullOrEmpty(ArgOptions.sGroup) || !String.IsNullOrEmpty(ArgOptions.sLdap) || !String.IsNullOrEmpty(ArgOptions.sSid) || !String.IsNullOrEmpty(ArgOptions.sSetSPN) || ArgOptions.bSPN || ArgOptions.bDelegation || ArgOptions.bAsrep || ArgOptions.bDc || ArgOptions.bTrust || ArgOptions.bGPO || ArgOptions.bDNS || ArgOptions.bPolicy || ArgOptions.bPasswdnotreqd || ArgOptions.bADCS)
+                    if (!String.IsNullOrEmpty(ArgOptions.sComp) || !String.IsNullOrEmpty(ArgOptions.sObject) || !String.IsNullOrEmpty(ArgOptions.sGroup) || !String.IsNullOrEmpty(ArgOptions.sLdap) || !String.IsNullOrEmpty(ArgOptions.sSid) || !String.IsNullOrEmpty(ArgOptions.sSetSPN) || ArgOptions.bSPN || ArgOptions.bDelegation || ArgOptions.bAsrep || ArgOptions.bDc || ArgOptions.bTrust || ArgOptions.bOus || ArgOptions.bGPO || ArgOptions.bDNS || ArgOptions.bPolicy || ArgOptions.bPasswdnotreqd || ArgOptions.bADCS)
                     {
                         if (!String.IsNullOrEmpty(ArgOptions.sComp))
                         {
@@ -4334,7 +4678,13 @@ namespace StandIn
                         }
                         else if (ArgOptions.bSPN)
                         {
-                            getSPNAccounts(ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                            if (ArgOptions.bOpsec)
+                            {
+                                getSPNAccountsWithOpsec(ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass, ArgOptions.sFilter);
+                            } else
+                            {
+                                getSPNAccounts(ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass);
+                            }
                         }
                         else if (ArgOptions.bDelegation)
                         {
@@ -4351,6 +4701,10 @@ namespace StandIn
                         else if (ArgOptions.bTrust)
                         {
                             GetADTrustRelationships();
+                        }
+                        else if (ArgOptions.bOus)
+                        {
+                            GetADOrganizationalUnits(ArgOptions.sDomain, ArgOptions.sUser, ArgOptions.sPass, ArgOptions.sFilter);
                         }
                         else if (!String.IsNullOrEmpty(ArgOptions.sLdap))
                         {
