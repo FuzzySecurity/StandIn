@@ -1491,7 +1491,18 @@ namespace StandIn
             // we use LdapConnection but it's is less friendly..
             try
             {
-                Domain oDom = Domain.GetComputerDomain();
+                Domain oDom;
+
+                if (string.IsNullOrWhiteSpace(sDomain))
+                {
+                    oDom = Domain.GetComputerDomain();
+                }
+                else
+                {
+                    var context = new DirectoryContext(DirectoryContextType.Domain, sDomain);
+                    oDom = Domain.GetDomain(context);
+                }
+                 
                 String sPDC = oDom.PdcRoleOwner.Name;
 
                 String sDomName = oDom.Name;
