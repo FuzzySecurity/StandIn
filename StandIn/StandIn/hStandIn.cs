@@ -448,9 +448,16 @@ namespace StandIn
             DirectoryEntry de = null;
             DirectorySearcher ds = null;
             SearchObject resultObject = new SearchObject();
+
+            string bindPath = "";
+            if (!String.IsNullOrEmpty(sDomain))
+            {
+                bindPath = String.Format("LDAP://{0}", sDomain);
+            }
+
             try
             {
-                de = new DirectoryEntry();
+                de = new DirectoryEntry(bindPath);
                 resultObject.sDC = de.Options.GetCurrentServerName();
                 Console.WriteLine("\n[?] Using DC : " + de.Options.GetCurrentServerName());
                 if (!String.IsNullOrEmpty(sDomain) && !String.IsNullOrEmpty(sUser) && !String.IsNullOrEmpty(sPass))
